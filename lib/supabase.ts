@@ -35,8 +35,8 @@ export interface Database {
 }
 
 // Create Supabase client with service role (for backend operations)
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
   auth: {
@@ -44,6 +44,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, 
     persistSession: false
   }
 });
+
+// Alias for consistency with POC guide
+export const supabaseAdmin = supabase;
 
 // Create Supabase client with anon key (for frontend operations)
 export function createBrowserClient() {

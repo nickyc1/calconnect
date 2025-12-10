@@ -1,51 +1,16 @@
+import { PipedreamClient } from '@pipedream/sdk';
 import { GoogleCalendarEvent } from './types';
-
-// Note: Pipedream SDK types may differ - adjust based on actual SDK
-interface PipedreamClient {
-  tokens: {
-    create: (params: { externalUserId: string }) => Promise<{
-      token: string;
-      expires_at: string;
-      connect_link_url: string;
-    }>;
-  };
-  sources: {
-    create: (params: any) => Promise<{ id: string; [key: string]: any }>;
-    delete: (sourceId: string) => Promise<void>;
-  };
-  proxy: {
-    get: (params: {
-      externalUserId: string;
-      accountId: string;
-      url: string;
-    }) => Promise<any>;
-    post: (params: {
-      externalUserId: string;
-      accountId: string;
-      url: string;
-      body: any;
-    }) => Promise<any>;
-    delete: (params: {
-      externalUserId: string;
-      accountId: string;
-      url: string;
-    }) => Promise<any>;
-  };
-}
 
 class PipedreamService {
   private client: PipedreamClient | null = null;
 
   private getClient(): PipedreamClient {
     if (!this.client) {
-      // Import dynamically to avoid issues during build
-      const { PipedreamClient } = require('@pipedream/sdk');
-
       this.client = new PipedreamClient({
-        projectEnvironment: process.env.PIPEDREAM_ENVIRONMENT as 'development' | 'production',
-        projectId: process.env.PIPEDREAM_PROJECT_ID!,
         clientId: process.env.PIPEDREAM_CLIENT_ID!,
-        clientSecret: process.env.PIPEDREAM_CLIENT_SECRET!
+        clientSecret: process.env.PIPEDREAM_CLIENT_SECRET!,
+        projectEnvironment: process.env.PIPEDREAM_ENVIRONMENT as 'development' | 'production',
+        projectId: process.env.PIPEDREAM_PROJECT_ID!
       });
     }
     return this.client;
@@ -53,14 +18,24 @@ class PipedreamService {
 
   /**
    * Generate Connect token for user authentication
+   * @param externalUserId - Your app's user ID
+   * @param webhookUri - Optional webhook URL to receive account connection notifications
    */
-  async generateConnectToken(externalUserId: string) {
+  async generateConnectToken(externalUserId: string, webhookUri?: string) {
     const client = this.getClient();
-    return await client.tokens.create({ externalUserId });
+    const opts: any = {
+      externalUserId: externalUserId
+    };
+
+    if (webhookUri) {
+      opts.webhookUri = webhookUri;
+    }
+
+    return await client.tokens.create(opts);
   }
 
   /**
-   * Deploy source for monitoring calendar
+   * Deploy trigger (source) for monitoring calendar - new and updated events
    */
   async deploySource(
     externalUserId: string,
@@ -69,22 +44,55 @@ class PipedreamService {
     webhookUrl: string
   ) {
     const client = this.getClient();
-    return await client.sources.create({
-      component_code: 'google_calendar-new-or-updated-event-instant',
-      configured_props: {
-        google_calendar: { account_id: accountId },
-        calendarIds: [calendarId],
-        http: { endpoint: webhookUrl }
-      }
+    return await client.triggers.deploy({
+      id: 'google_calendar-new-or-updated-event-instant',
+      externalUserId: externalUserId,
+      configuredProps: {
+        googleCalendar: {
+          authProvisionId: accountId
+        },
+        calendarIds: [calendarId]
+      },
+      webhookUrl: webhookUrl
     });
   }
 
   /**
-   * Delete a deployed source
+   * Deploy trigger (source) for monitoring cancelled/deleted events
+   * This is a polling source that checks at regular intervals
    */
-  async deleteSource(sourceId: string) {
+  async deployCancelledEventSource(
+    externalUserId: string,
+    accountId: string,
+    calendarId: string,
+    webhookUrl: string,
+    intervalSeconds: number = 300 // Default: 5 minutes
+  ) {
     const client = this.getClient();
-    return await client.sources.delete(sourceId);
+    return await client.triggers.deploy({
+      id: 'google_calendar-event-cancelled',
+      externalUserId: externalUserId,
+      configuredProps: {
+        googleCalendar: {
+          authProvisionId: accountId
+        },
+        calendarId: calendarId,
+        timer: {
+          intervalSeconds: intervalSeconds
+        }
+      },
+      webhookUrl: webhookUrl
+    });
+  }
+
+  /**
+   * Delete a deployed trigger (source)
+   */
+  async deleteSource(sourceId: string, externalUserId: string) {
+    const client = this.getClient();
+    return await client.deployedTriggers.delete(sourceId, {
+      externalUserId: externalUserId
+    });
   }
 
   /**
@@ -97,11 +105,15 @@ class PipedreamService {
     eventId: string
   ): Promise<GoogleCalendarEvent> {
     const client = this.getClient();
-    return await client.proxy.get({
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+
+    const response = await client.proxy.get({
+      url,
       externalUserId,
-      accountId,
-      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
+      accountId
     });
+
+    return response as GoogleCalendarEvent;
   }
 
   /**
@@ -121,6 +133,7 @@ class PipedreamService {
     }
   ): Promise<GoogleCalendarEvent> {
     const client = this.getClient();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
     const mirrorData = {
       summary: "Busy",
@@ -140,12 +153,43 @@ class PipedreamService {
       }
     };
 
-    return await client.proxy.post({
+    const response = await client.proxy.post({
+      url,
       externalUserId,
       accountId,
-      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
       body: mirrorData
     });
+
+    return response as GoogleCalendarEvent;
+  }
+
+  /**
+   * Update mirror event via proxy
+   */
+  async updateMirrorEvent(
+    externalUserId: string,
+    accountId: string,
+    calendarId: string,
+    eventId: string,
+    eventData: {
+      start: GoogleCalendarEvent['start'];
+      end: GoogleCalendarEvent['end'];
+    }
+  ): Promise<GoogleCalendarEvent> {
+    const client = this.getClient();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+
+    const response = await client.proxy.patch({
+      url,
+      externalUserId,
+      accountId,
+      body: {
+        start: eventData.start,
+        end: eventData.end
+      }
+    });
+
+    return response as GoogleCalendarEvent;
   }
 
   /**
@@ -158,10 +202,12 @@ class PipedreamService {
     eventId: string
   ): Promise<void> {
     const client = this.getClient();
-    return await client.proxy.delete({
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+
+    await client.proxy.delete({
+      url,
       externalUserId,
-      accountId,
-      url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
+      accountId
     });
   }
 }
