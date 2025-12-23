@@ -57,6 +57,12 @@ export async function POST(request: NextRequest) {
       throw error; // Re-throw other errors
     }
 
+    // Skip if this is already a mirror event (check BEFORE processing deletion)
+    if ((sourceEvent as any).extendedProperties?.private?.mircal_is_mirror === 'true') {
+      console.log('Skipping mirror event');
+      return NextResponse.json({ received: true, skipped: 'mirror_event' });
+    }
+
     // Check if event was cancelled (soft delete)
     if ((sourceEvent as any).status === 'cancelled') {
       console.log(`Event ${eventId} cancelled, processing deletion`);
@@ -64,28 +70,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, processed: true, action: 'deleted' });
     }
 
-    // Skip if this is already a mirror event
-    if ((sourceEvent as any).extendedProperties?.private?.mircal_is_mirror === 'true') {
-      console.log('Skipping mirror event');
-      return NextResponse.json({ received: true, skipped: 'mirror_event' });
-    }
-
-    // Get user's destination accounts
+    // Get destination accounts for this event
+    // = ALL user accounts EXCEPT the one the event originated from
+    // This means events can mirror TO other source accounts (but never to origin)
     const { data: destAccounts, error: accountsError } = await supabaseAdmin
       .from('user_accounts')
       .select('*')
       .eq('user_id', userId)
       .eq('is_active', true)
-      .neq('account_id', accountId); // Exclude source account
+      .neq('account_id', accountId); // Exclude originating account
 
     console.log(`Found ${destAccounts?.length || 0} destination account(s) for user ${userId}`);
 
     if (accountsError || !destAccounts || destAccounts.length === 0) {
-      console.log(`No destination accounts found for user ${userId}. Source account: ${accountId}. User needs to connect additional accounts to enable mirroring.`);
+      console.log(`No destination accounts found for user ${userId}. Originating account: ${accountId}. User needs to connect additional accounts to enable mirroring.`);
       return NextResponse.json({
         received: true,
         skipped: 'no_destinations',
-        message: 'No destination accounts configured. Connect at least 2 accounts to enable mirroring.'
+        message: 'No destination accounts (all mirrors would be to origin). Event not mirrored.'
       });
     }
 

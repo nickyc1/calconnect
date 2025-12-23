@@ -130,12 +130,13 @@ class PipedreamService {
       sourceAccountId: string;
       sourceCalendarId: string;
       colorId?: string;
+      recurringEventId?: string; // For recurring event instances
     }
   ): Promise<GoogleCalendarEvent> {
     const client = this.getClient();
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
-    const mirrorData = {
+    const mirrorData: any = {
       summary: "Busy",
       start: eventData.start,
       end: eventData.end,
@@ -152,6 +153,11 @@ class PipedreamService {
         }
       }
     };
+
+    // Add recurringEventId if this is a recurring instance
+    if (eventData.recurringEventId) {
+      mirrorData.extendedProperties.private.mircal_recurring_event_id = eventData.recurringEventId;
+    }
 
     const response = await client.proxy.post({
       url,

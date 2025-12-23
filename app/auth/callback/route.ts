@@ -17,13 +17,12 @@ export async function GET(request: Request) {
 
       if (user) {
         // Upsert user in public.users table (create if doesn't exist)
-        // Note: id is UUID (from auth.users.id), external_user_id is also the UUID
+        // Note: user.id is UUID from Supabase auth, used directly for Pipedream Connect
         const { error: upsertError } = await (supabaseAdmin as any)
           .from('users')
           .upsert({
-            id: user.id, // UUID from Supabase auth
+            id: user.id, // UUID from Supabase auth (used for Pipedream externalUserId)
             email: user.email,
-            external_user_id: user.id, // Same UUID, used for Pipedream Connect
             updated_at: new Date().toISOString()
           }, {
             onConflict: 'id' // Use id as the conflict resolution column

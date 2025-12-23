@@ -3,6 +3,12 @@ import { supabaseAdmin } from './supabase';
 import { withRetry } from '@/utils/retry';
 import { AppError } from '@/utils/error-handler';
 import { MirroredEvent } from './types';
+import {
+  isRecurringEvent,
+  isRecurringInstance,
+  expandRecurringEvent,
+  generateInstanceId
+} from './recurring-events';
 
 export class CalendarSyncService {
   /**
@@ -146,6 +152,7 @@ export class CalendarSyncService {
   /**
    * Create mirror events in destination accounts
    * Called directly from webhook handler when we already have the event and accounts
+   * Handles both single events and recurring events
    */
   async createMirrorEvents(
     userId: string,
@@ -172,6 +179,18 @@ export class CalendarSyncService {
         successful: existingMapping.mirrored_events || [],
         failed: []
       };
+    }
+
+    // Check if this is a recurring event
+    if (isRecurringEvent(sourceEvent)) {
+      console.log(`Detected recurring event, expanding instances...`);
+      return await this.createRecurringMirrors(
+        userId,
+        sourceAccountId,
+        sourceCalendarId,
+        sourceEvent,
+        destAccounts
+      );
     }
 
     console.log(`Creating mirrors in ${destAccounts.length} destination calendar(s)`);
@@ -236,7 +255,8 @@ export class CalendarSyncService {
         source_event_id: sourceEventId,
         source_account_id: sourceAccountId,
         source_calendar_id: sourceCalendarId,
-        mirrored_events: successful
+        mirrored_events: successful,
+        is_recurring: false
       })
       .select()
       .single();
@@ -246,6 +266,122 @@ export class CalendarSyncService {
     }
 
     return { successful, failed };
+  }
+
+  /**
+   * Create mirrors for a recurring event by expanding all instances
+   */
+  private async createRecurringMirrors(
+    userId: string,
+    sourceAccountId: string,
+    sourceCalendarId: string,
+    sourceEvent: any,
+    destAccounts: any[]
+  ) {
+    const baseEventId = sourceEvent.id;
+
+    // Expand recurring event to instances
+    const instances = expandRecurringEvent(sourceEvent);
+
+    if (instances.length === 0) {
+      console.error('Failed to expand recurring event');
+      return { successful: [], failed: [] };
+    }
+
+    console.log(`Creating mirrors for ${instances.length} instances in ${destAccounts.length} destination(s)`);
+
+    const allSuccessful: MirroredEvent[] = [];
+    const allFailed: any[] = [];
+
+    // Create mirrors for each instance
+    for (const instance of instances) {
+      const instanceId = generateInstanceId(baseEventId, instance.instanceDate);
+
+      const mirrorPromises = destAccounts.map(async (dest) => {
+        try {
+          const result = await withRetry(() =>
+            pipedream.createMirrorEvent(
+              userId,
+              dest.account_id,
+              'primary',
+              {
+                start: instance.start,
+                end: instance.end,
+                sourceEventId: instanceId,
+                sourceAccountId,
+                sourceCalendarId,
+                colorId: dest.color_id || '1',
+                recurringEventId: baseEventId // Track base event for recurring instances
+              }
+            )
+          );
+
+          return {
+            success: true,
+            mirror: {
+              event_id: result.id,
+              account_id: dest.account_id,
+              calendar_id: 'primary',
+              instance_date: instance.instanceDate
+            }
+          };
+        } catch (error) {
+          console.error(`Failed to create mirror for instance ${instanceId}:`, error);
+          return {
+            success: false,
+            error: error
+          };
+        }
+      });
+
+      const results = await Promise.all(mirrorPromises);
+      const successful = results.filter(r => r.success).map(r => r.mirror) as MirroredEvent[];
+      const failed = results.filter(r => !r.success);
+
+      allSuccessful.push(...successful);
+      allFailed.push(...failed);
+
+      // Store mapping for this instance
+      if (successful.length > 0) {
+        await (supabaseAdmin as any)
+          .from('event_mappings')
+          .insert({
+            user_id: userId,
+            source_event_id: instanceId,
+            source_account_id: sourceAccountId,
+            source_calendar_id: sourceCalendarId,
+            mirrored_events: successful,
+            is_recurring: true,
+            recurring_event_id: baseEventId
+          });
+      }
+    }
+
+    console.log(`Created ${allSuccessful.length} total mirrors for ${instances.length} instances`);
+
+    // Create base event marker to prevent duplicate processing from multiple webhooks
+    // Google Calendar sends multiple webhooks for the same base recurring event
+    // This marker enables the idempotency check to catch duplicate webhooks
+    try {
+      await (supabaseAdmin as any)
+        .from('event_mappings')
+        .insert({
+          user_id: userId,
+          source_event_id: baseEventId,  // BASE event ID (without instance date suffix)
+          source_account_id: sourceAccountId,
+          source_calendar_id: sourceCalendarId,
+          mirrored_events: [],  // Empty - actual mirrors tracked per instance
+          is_recurring: false,  // This is the base event, not an instance
+          recurring_event_id: null  // This IS the base (doesn't point to another event)
+        });
+
+      console.log(`Created base event marker for ${baseEventId} to prevent duplicate processing`);
+    } catch (error) {
+      // If marker already exists (duplicate insert), that's fine - it means we're protected
+      console.log(`Base event marker for ${baseEventId} already exists or failed to create:`, error);
+    }
+
+    return { successful: allSuccessful, failed: allFailed };
   }
 
   /**
@@ -315,6 +451,7 @@ export class CalendarSyncService {
 
   /**
    * Handle source event deletion
+   * Handles both single events and recurring event instances
    */
   async handleEventDeleted(
     userId: string,
@@ -323,6 +460,17 @@ export class CalendarSyncService {
     sourceCalendarId: string
   ) {
     console.log(`Processing event deleted: ${sourceEventId} for user ${userId}`);
+
+    // Check if this is a recurring event instance (contains underscore)
+    if (sourceEventId.includes('_')) {
+      console.log(`Detected recurring instance deletion: ${sourceEventId}`);
+      return await this.handleRecurringInstanceDeleted(
+        userId,
+        externalUserId,
+        sourceEventId,
+        sourceCalendarId
+      );
+    }
 
     // Get mapping
     const { data: mapping, error: fetchError } = await (supabaseAdmin as any)
@@ -338,6 +486,32 @@ export class CalendarSyncService {
       return;
     }
 
+    // Check if this is a base recurring event - need to delete all instances
+    if (mapping.is_recurring === false && mapping.recurring_event_id === null) {
+      // Regular single event deletion
+      await this.deleteMirrorEvents(userId, externalUserId, mapping);
+    } else {
+      // This is a base recurring event - delete all related instances
+      console.log(`Deleting all instances for recurring event ${sourceEventId}`);
+      await this.handleRecurringBaseDeleted(
+        userId,
+        externalUserId,
+        sourceEventId,
+        sourceCalendarId
+      );
+    }
+
+    console.log(`Event deletion complete for ${sourceEventId}`);
+  }
+
+  /**
+   * Delete mirror events for a single event mapping
+   */
+  private async deleteMirrorEvents(
+    userId: string,
+    externalUserId: string,
+    mapping: any
+  ) {
     if (!mapping.mirrored_events || mapping.mirrored_events.length === 0) {
       console.log('No mirrored events to delete');
       await this.deleteMappingRecord(mapping.id);
@@ -370,8 +544,73 @@ export class CalendarSyncService {
 
     // Remove mapping
     await this.deleteMappingRecord(mapping.id);
+  }
 
-    console.log(`Event deletion complete for ${sourceEventId}`);
+  /**
+   * Handle deletion of a recurring event instance
+   * This handles "Delete This Event" scenario
+   */
+  private async handleRecurringInstanceDeleted(
+    userId: string,
+    externalUserId: string,
+    instanceId: string,
+    sourceCalendarId: string
+  ) {
+    console.log(`Deleting mirrors for recurring instance: ${instanceId}`);
+
+    // Get mapping for this specific instance
+    const { data: mapping, error: fetchError } = await (supabaseAdmin as any)
+      .from('event_mappings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('source_event_id', instanceId)
+      .eq('source_calendar_id', sourceCalendarId)
+      .single();
+
+    if (fetchError || !mapping) {
+      console.log(`No mapping found for instance ${instanceId}`);
+      return;
+    }
+
+    await this.deleteMirrorEvents(userId, externalUserId, mapping);
+  }
+
+  /**
+   * Handle deletion of base recurring event
+   * This handles "Delete All Events" scenario
+   */
+  private async handleRecurringBaseDeleted(
+    userId: string,
+    externalUserId: string,
+    baseEventId: string,
+    sourceCalendarId: string
+  ) {
+    console.log(`Deleting all instances for recurring event: ${baseEventId}`);
+
+    // Get all instance mappings for this base event
+    const { data: instanceMappings, error: fetchError } = await (supabaseAdmin as any)
+      .from('event_mappings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('recurring_event_id', baseEventId)
+      .eq('source_calendar_id', sourceCalendarId);
+
+    if (fetchError) {
+      console.error('Error fetching instance mappings:', fetchError);
+      return;
+    }
+
+    if (!instanceMappings || instanceMappings.length === 0) {
+      console.log(`No instance mappings found for base event ${baseEventId}`);
+      return;
+    }
+
+    console.log(`Found ${instanceMappings.length} instance(s) to delete`);
+
+    // Delete mirrors for each instance
+    for (const mapping of instanceMappings) {
+      await this.deleteMirrorEvents(userId, externalUserId, mapping);
+    }
   }
 
   /**

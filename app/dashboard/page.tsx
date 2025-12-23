@@ -15,7 +15,7 @@ interface Source {
   id: string
   source_id: string
   source_type: string
-  is_active: boolean
+  account_id: string
 }
 
 export default function DashboardPage() {
@@ -73,17 +73,33 @@ export default function DashboardPage() {
         setStatus('Opening connection window...')
         window.open(`${data.connectLinkUrl}&app=google_calendar`, '_blank', 'width=500,height=600')
 
-        // Poll for new account
-        const pollInterval = setInterval(async () => {
-          await loadData()
-        }, 3000)
+        // Poll for new account (Bug #3 fix: store interval ID for cleanup)
+        let pollInterval: NodeJS.Timeout | null = null
+        let pollTimeout: NodeJS.Timeout | null = null
 
-        // Stop polling after 2 minutes
-        setTimeout(() => {
-          clearInterval(pollInterval)
-          setActionLoading(false)
-          setStatus('')
-        }, 120000)
+        const startPolling = () => {
+          pollInterval = setInterval(async () => {
+            const prevCount = accounts.length
+            await loadData()
+            // Stop polling if new account detected
+            if (accounts.length > prevCount) {
+              if (pollInterval) clearInterval(pollInterval)
+              if (pollTimeout) clearTimeout(pollTimeout)
+              setActionLoading(false)
+              setStatus('Account connected successfully!')
+              setTimeout(() => setStatus(''), 3000)
+            }
+          }, 3000)
+
+          // Stop polling after 2 minutes
+          pollTimeout = setTimeout(() => {
+            if (pollInterval) clearInterval(pollInterval)
+            setActionLoading(false)
+            setStatus('')
+          }, 120000)
+        }
+
+        startPolling()
       }
     } catch (error: any) {
       setStatus(`Error: ${error.message}`)
@@ -91,19 +107,22 @@ export default function DashboardPage() {
     }
   }
 
-  const setSourceAccount = async (accountId: string) => {
+  const toggleSourceAccount = async (accountId: string, isSource: boolean) => {
     setActionLoading(true)
-    setStatus('Setting source account...')
+    setStatus(isSource ? 'Adding source account...' : 'Removing source account...')
 
     try {
-      const res = await fetch(`/api/accounts/${accountId}/set-source`, {
-        method: 'POST'
+      const res = await fetch(`/api/accounts/${accountId}/toggle-source`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isSource })
       })
       const data = await res.json()
 
       if (data.success) {
-        setStatus('Source account set!')
+        setStatus(isSource ? 'Source account added!' : 'Source account removed!')
         await loadData()
+        setTimeout(() => setStatus(''), 2000)
       } else {
         setStatus(`Error: ${data.error}`)
       }
@@ -115,6 +134,21 @@ export default function DashboardPage() {
   }
 
   const activateMirroring = async () => {
+    // Validate: need at least 2 accounts and at least 1 source
+    // Note: All sources can also be destinations for other sources
+    // (events from source A mirror to source B and vice versa)
+    const sourceAccounts = accounts.filter(a => a.is_source_account)
+
+    if (accounts.length < 2) {
+      setStatus('Error: Need at least 2 accounts to enable mirroring')
+      return
+    }
+
+    if (sourceAccounts.length === 0) {
+      setStatus('Error: Select at least one source account')
+      return
+    }
+
     setActionLoading(true)
     setStatus('Activating mirroring...')
 
@@ -125,8 +159,9 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (data.success) {
-        setStatus('Mirroring activated!')
+        setStatus(`Mirroring activated! ${data.sourcesDeployed || 0} sources deployed.`)
         await loadData()
+        setTimeout(() => setStatus(''), 3000)
       } else {
         setStatus(`Error: ${data.error}`)
       }
@@ -160,9 +195,37 @@ export default function DashboardPage() {
     setActionLoading(false)
   }
 
-  const sourceAccount = accounts.find(a => a.is_source_account)
+  const removeAccount = async (accountId: string, accountName: string) => {
+    if (!confirm(`Remove ${accountName}? This action cannot be undone.`)) {
+      return
+    }
+
+    setActionLoading(true)
+    setStatus('Removing account...')
+
+    try {
+      const res = await fetch(`/api/accounts/${accountId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setStatus('Account removed successfully!')
+        await loadData()
+        setTimeout(() => setStatus(''), 2000)
+      } else {
+        setStatus(`Error: ${data.error}`)
+      }
+    } catch (error: any) {
+      setStatus(`Error: ${error.message}`)
+    }
+
+    setActionLoading(false)
+  }
+
+  const sourceAccounts = accounts.filter(a => a.is_source_account)
   const destinationAccounts = accounts.filter(a => !a.is_source_account)
-  const hasActiveSources = sources.some(s => s.is_active)
+  const hasActiveSources = sources.length > 0
 
   if (loading) {
     return <div>Loading...</div>
@@ -208,7 +271,7 @@ export default function DashboardPage() {
                 justifyContent: 'space-between',
                 alignItems: 'center'
               }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <strong>{account.account_display_name || account.account_id}</strong>
                   {account.is_source_account && (
                     <span style={{
@@ -223,21 +286,47 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                {!account.is_source_account && !hasActiveSources && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    cursor: actionLoading ? 'not-allowed' : 'pointer',
+                    opacity: actionLoading ? 0.5 : 1
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={account.is_source_account}
+                      onChange={(e) => toggleSourceAccount(account.account_id, e.target.checked)}
+                      disabled={actionLoading}
+                      style={{
+                        marginRight: '0.5rem',
+                        width: '18px',
+                        height: '18px',
+                        cursor: actionLoading ? 'not-allowed' : 'pointer'
+                      }}
+                    />
+                    <span style={{ fontSize: '0.9rem', color: '#666' }}>
+                      Use as source calendar
+                    </span>
+                  </label>
                   <button
-                    onClick={() => setSourceAccount(account.account_id)}
-                    disabled={actionLoading}
+                    onClick={() => removeAccount(account.account_id, account.account_display_name || account.account_id)}
+                    disabled={actionLoading || hasActiveSources}
                     style={{
-                      padding: '0.5rem 1rem',
-                      background: '#eee',
+                      padding: '0.4rem 0.8rem',
+                      background: hasActiveSources ? '#ccc' : '#dc3545',
+                      color: 'white',
                       border: 'none',
                       borderRadius: '4px',
-                      cursor: 'pointer'
+                      fontSize: '0.85rem',
+                      cursor: (actionLoading || hasActiveSources) ? 'not-allowed' : 'pointer',
+                      opacity: (actionLoading || hasActiveSources) ? 0.5 : 1
                     }}
+                    title={hasActiveSources ? 'Disable mirroring first' : 'Remove account'}
                   >
-                    Set as Source
+                    Remove
                   </button>
-                )}
+                </div>
               </li>
             ))}
           </ul>
@@ -281,9 +370,13 @@ export default function DashboardPage() {
             }}>
               <strong style={{ color: '#060' }}>Active</strong>
               <p style={{ margin: '0.5rem 0 0 0', color: '#666' }}>
-                Events from <strong>{sourceAccount?.account_display_name}</strong> are being
-                mirrored to {destinationAccounts.length} destination calendar(s).
+                {sourceAccounts.length} source(s) active. Each source mirrors to {accounts.length - 1} other account(s).
               </p>
+              {sourceAccounts.length > 0 && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
+                  <strong>Sources:</strong> {sourceAccounts.map(a => a.account_display_name || a.account_id).join(', ')}
+                </div>
+              )}
             </div>
             <button
               onClick={deactivateMirroring}
@@ -297,7 +390,7 @@ export default function DashboardPage() {
                 cursor: actionLoading ? 'not-allowed' : 'pointer'
               }}
             >
-              Deactivate Mirroring
+              Disable Mirroring
             </button>
           </div>
         ) : (
@@ -312,12 +405,17 @@ export default function DashboardPage() {
               <p style={{ margin: '0.5rem 0 0 0', color: '#666' }}>
                 {accounts.length < 2
                   ? 'Connect at least 2 accounts to enable mirroring.'
-                  : !sourceAccount
-                    ? 'Select a source account to enable mirroring.'
-                    : 'Ready to activate mirroring.'}
+                  : sourceAccounts.length === 0
+                    ? 'Select at least one source account to enable mirroring.'
+                    : 'Ready to enable mirroring.'}
               </p>
+              {sourceAccounts.length > 0 && accounts.length >= 2 && (
+                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', color: '#666' }}>
+                  {sourceAccounts.length} source(s) → {accounts.length - 1} destination(s) per source
+                </p>
+              )}
             </div>
-            {accounts.length >= 2 && sourceAccount && (
+            {accounts.length >= 2 && sourceAccounts.length > 0 && (
               <button
                 onClick={activateMirroring}
                 disabled={actionLoading}
@@ -330,7 +428,7 @@ export default function DashboardPage() {
                   cursor: actionLoading ? 'not-allowed' : 'pointer'
                 }}
               >
-                Activate Mirroring
+                Enable Mirroring
               </button>
             )}
           </div>
@@ -348,9 +446,10 @@ export default function DashboardPage() {
         <h4 style={{ marginTop: 0, color: '#333' }}>How it works</h4>
         <ol style={{ paddingLeft: '1.25rem' }}>
           <li>Connect 2-3 Google Calendar accounts</li>
-          <li>Select one account as the "source"</li>
-          <li>Activate mirroring</li>
-          <li>Events in source calendar automatically appear as "Busy" in all other calendars</li>
+          <li>Select one or more accounts as "source" calendars using checkboxes</li>
+          <li>Enable mirroring</li>
+          <li>Events created in any source calendar automatically appear as "Busy" in all other calendars (including other sources)</li>
+          <li>Events mirror to all accounts except the one where the event originated</li>
         </ol>
       </div>
     </div>

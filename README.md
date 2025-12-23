@@ -34,7 +34,7 @@ Fill in your credentials:
 npm run dev
 ```
 
-Visit **http://localhost:3000/test** to test the POC.
+Visit **http://localhost:3000** - redirects to login page or dashboard.
 
 ## Architecture
 
@@ -49,22 +49,27 @@ Visit **http://localhost:3000/test** to test the POC.
 mircal_backend/
 ├── app/
 │   ├── api/
+│   │   ├── accounts/        # Account management endpoints
 │   │   ├── connect/         # Connect token & webhook callback
-│   │   ├── deploy-source/   # Deploy Pipedream sources
+│   │   ├── mirroring/       # Activate/deactivate mirroring
+│   │   ├── sources/         # Source listing
 │   │   └── webhook/         # Calendar event webhooks
-│   └── test/                # Test UI (POC)
+│   ├── auth/                # Supabase Auth routes
+│   ├── dashboard/           # User dashboard UI
+│   └── login/               # Login page
 ├── lib/
 │   ├── pipedream.ts         # Pipedream SDK wrapper
 │   ├── supabase.ts          # Supabase client
+│   ├── supabase-server.ts   # Server-side Supabase client
 │   ├── calendar-sync.ts     # Mirror event logic
 │   └── types.ts             # TypeScript definitions
+├── middleware.ts            # Auth middleware
 ├── supabase/
-│   ├── migrations/          # Database migrations
-│   └── README.md            # Database setup guide
-└── docs/                    # Project documentation
+│   └── migrations/          # Database migrations (001-005)
+└── docs/                    # Technical documentation
 ```
 
-## Testing the POC
+## Local Development with Webhooks
 
 ### Using ngrok for Webhooks
 
@@ -90,17 +95,15 @@ mircal_backend/
 
 5. **Restart your dev server**
 
-### Test Flow
+### Testing Flow
 
-1. Go to http://localhost:3000/test
-2. Click "Generate Token"
-3. Click the Connect URL to authorize Google Calendar
-4. Pipedream sends webhook → Account saved automatically!
-5. Check server logs: "Account connected successfully"
-6. Query Supabase to find your `account_id`
-7. Paste Account ID and click "Deploy Source"
-8. Create a test event in Google Calendar
-9. Watch webhooks and database for mirror events
+1. Go to http://localhost:3000 → redirects to `/login`
+2. Sign in with Google OAuth
+3. Connect 2-3 Google Calendar accounts
+4. Select one account as the "source"
+5. Click "Activate Mirroring"
+6. Create/delete events in source calendar
+7. Verify mirrors appear/disappear in destination calendars
 
 ## API Endpoints
 
@@ -108,7 +111,11 @@ mircal_backend/
 |----------|--------|-------------|
 | `/api/connect/token` | POST | Generate Pipedream Connect token |
 | `/api/connect/callback` | POST | Webhook for account connections |
-| `/api/deploy-source` | POST | Deploy Pipedream calendar source |
+| `/api/accounts` | GET | List user's connected accounts |
+| `/api/accounts/[id]/set-source` | POST | Set account as source |
+| `/api/sources` | GET | List user's deployed sources |
+| `/api/mirroring/activate` | POST | Deploy sources and start mirroring |
+| `/api/mirroring/deactivate` | POST | Remove sources and stop mirroring |
 | `/api/webhook` | POST | Receive calendar event notifications |
 
 ## Documentation
@@ -165,13 +172,18 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ## Implementation Status
 
 - [x] Infrastructure setup
-- [x] Database schema with migrations
+- [x] Database schema with migrations (001-005)
+- [x] Supabase Auth with Google OAuth
 - [x] Pipedream Connect integration
 - [x] Webhook-based account connection
-- [x] Calendar source deployment
-- [ ] Event mirroring logic (in progress)
-- [ ] Error handling and retry logic
-- [ ] Testing and deployment
+- [x] Multi-tenant user management
+- [x] Dashboard UI
+- [x] Source/destination account selection
+- [x] Mirroring activation/deactivation
+- [x] Event mirroring (create)
+- [x] Event deletion detection
+- [ ] Error handling and retry logic (in progress)
+- [ ] Production deployment
 
 ## Troubleshooting
 
