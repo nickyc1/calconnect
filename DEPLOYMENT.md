@@ -106,6 +106,18 @@ PIPEDREAM_CLIENT_SECRET=your_pipedream_client_secret
 PIPEDREAM_PROJECT_ID=your_pipedream_project_id
 PIPEDREAM_ENVIRONMENT=production
 
+# Pipedream Source Deployment Settings
+# Whether to emit events for existing calendar entries when sources are deployed
+# Set to 'false' to prevent webhook flood on activation (RECOMMENDED)
+# Set to 'true' only if you want to process all existing events on activation
+EMIT_EVENTS_ON_DEPLOY=false
+
+# Polling interval for deleted/cancelled events source (in seconds)
+# Default: 300 seconds (5 minutes)
+# Lower values = more frequent checks = higher API usage
+# Higher values = less frequent checks = delayed deletion detection
+DELETED_EVENTS_POLL_INTERVAL_SECONDS=300
+
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key

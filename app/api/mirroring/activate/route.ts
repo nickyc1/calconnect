@@ -69,13 +69,12 @@ export async function POST() {
           webhookUrl
         )
 
-        // Deploy cancelled source
+        // Deploy cancelled source (polling interval from env var)
         const cancelledSource = await pipedream.deployCancelledEventSource(
           user.id,
           sourceAccount.account_id,
           'primary',
-          webhookUrl,
-          300
+          webhookUrl
         )
 
         deployedSources.push({ instantSource, cancelledSource, accountId: sourceAccount.account_id })

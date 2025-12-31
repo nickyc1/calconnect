@@ -76,13 +76,12 @@ export async function POST(
             webhookUrl
           )
 
-          // Deploy cancelled source
+          // Deploy cancelled source (polling interval from env var)
           const cancelledSource = await pipedream.deployCancelledEventSource(
             user.id,
             accountId,
             'primary',
-            webhookUrl,
-            300
+            webhookUrl
           )
 
           // Store sources in database

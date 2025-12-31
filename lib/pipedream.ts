@@ -44,6 +44,9 @@ class PipedreamService {
     webhookUrl: string
   ) {
     const client = this.getClient();
+    // Get emit_on_deploy setting from environment variable (default: false)
+    const emitOnDeploy = process.env.EMIT_EVENTS_ON_DEPLOY === 'true';
+
     return await client.triggers.deploy({
       id: 'google_calendar-new-or-updated-event-instant',
       externalUserId: externalUserId,
@@ -53,8 +56,9 @@ class PipedreamService {
         },
         calendarIds: [calendarId]
       },
-      webhookUrl: webhookUrl
-    });
+      webhookUrl: webhookUrl,
+      emit_on_deploy: emitOnDeploy
+    } as any);
   }
 
   /**
@@ -66,9 +70,16 @@ class PipedreamService {
     accountId: string,
     calendarId: string,
     webhookUrl: string,
-    intervalSeconds: number = 300 // Default: 5 minutes
+    intervalSeconds?: number // Optional: defaults to env var or 300 seconds
   ) {
     const client = this.getClient();
+    // Get emit_on_deploy setting from environment variable (default: false)
+    const emitOnDeploy = process.env.EMIT_EVENTS_ON_DEPLOY === 'true';
+
+    // Get polling interval from environment variable (default: 300 seconds = 5 minutes)
+    const pollInterval = intervalSeconds ??
+      parseInt(process.env.DELETED_EVENTS_POLL_INTERVAL_SECONDS || '300', 10);
+
     return await client.triggers.deploy({
       id: 'google_calendar-event-cancelled',
       externalUserId: externalUserId,
@@ -78,11 +89,12 @@ class PipedreamService {
         },
         calendarId: calendarId,
         timer: {
-          intervalSeconds: intervalSeconds
+          intervalSeconds: pollInterval
         }
       },
-      webhookUrl: webhookUrl
-    });
+      webhookUrl: webhookUrl,
+      emit_on_deploy: emitOnDeploy
+    } as any);
   }
 
   /**

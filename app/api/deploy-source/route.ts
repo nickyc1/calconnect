@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
 
     console.log('Instant source deployed:', instantSource.data.id);
 
+    // Deploy cancelled events source (polling interval from env var)
     const cancelledSource = await pipedream.deployCancelledEventSource(
       userId,
       accountId,
       calendarId,
-      webhookUrl,
-      300 // Poll every 5 minutes
+      webhookUrl
     );
 
     console.log('Cancelled source deployed:', cancelledSource.data.id);
