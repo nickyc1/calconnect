@@ -29,14 +29,26 @@ export function isRecurringInstance(event: any): boolean {
  * Parse RRULE from Google Calendar event and expand to individual instances
  *
  * @param event - Google Calendar event with recurrence field
+ * @param maxInstances - Optional maximum number of instances (defaults to env var or 365)
+ * @param maxYears - Optional maximum years from today (defaults to env var or 2)
  * @returns Array of instance dates with start/end times
  */
-export function expandRecurringEvent(event: any): RecurringEventInstance[] {
+export function expandRecurringEvent(
+  event: any,
+  maxInstances?: number,
+  maxYears?: number
+): RecurringEventInstance[] {
   if (!event.recurrence || event.recurrence.length === 0) {
     return []
   }
 
   try {
+    // Get safety limits from environment variables or parameters
+    const instanceLimit = maxInstances ??
+      parseInt(process.env.MAX_RECURRING_INSTANCES || '365', 10)
+    const yearLimit = maxYears ??
+      parseInt(process.env.MAX_RECURRING_YEARS || '2', 10)
+
     // Get the base start time
     const baseStart = event.start.dateTime || event.start.date
     const baseEnd = event.end.dateTime || event.end.date
@@ -56,8 +68,46 @@ export function expandRecurringEvent(event: any): RecurringEventInstance[] {
       forceset: false
     })
 
-    // Generate all instance dates
-    const instances = rrule.all().map((instanceStart: Date) => {
+    // Calculate time-based limit (yearLimit years from today)
+    const now = new Date()
+    const maxDate = yearLimit > 0
+      ? new Date(now.getFullYear() + yearLimit, now.getMonth(), now.getDate())
+      : null
+
+    // Generate instances with BOTH count and time limits
+    let instanceDates: Date[]
+    if (maxDate) {
+      // Use time-based limit via between() method
+      instanceDates = rrule.between(now, maxDate, true)
+
+      // Also enforce count limit
+      if (instanceDates.length > instanceLimit) {
+        console.warn(
+          `Recurring event ${event.id} has ${instanceDates.length} instances in next ${yearLimit} years, ` +
+          `limiting to ${instanceLimit} instances`
+        )
+        instanceDates = instanceDates.slice(0, instanceLimit)
+      }
+    } else {
+      // Use count-based limit only
+      let count = 0
+      instanceDates = rrule.all((date, i) => {
+        count++
+        return count <= instanceLimit
+      })
+    }
+
+    // Check if we hit the limit and warn
+    const wasLimited = instanceDates.length >= instanceLimit
+    if (wasLimited) {
+      console.warn(
+        `⚠️ RECURRING EVENT LIMIT: Event ${event.id} (${event.summary || 'Untitled'}) ` +
+        `was limited to ${instanceLimit} instances. Original RRULE may generate more.`
+      )
+    }
+
+    // Convert to RecurringEventInstance format
+    const instances = instanceDates.map((instanceStart: Date) => {
       // Calculate duration from original event
       const duration = new Date(baseEnd).getTime() - new Date(baseStart).getTime()
       const instanceEnd = new Date(instanceStart.getTime() + duration)
@@ -76,7 +126,11 @@ export function expandRecurringEvent(event: any): RecurringEventInstance[] {
       }
     })
 
-    console.log(`Expanded recurring event ${event.id} to ${instances.length} instances`)
+    console.log(
+      `Expanded recurring event ${event.id} to ${instances.length} instances` +
+      (wasLimited ? ` (LIMITED from potentially more)` : '')
+    )
+
     return instances
   } catch (error) {
     console.error('Error expanding recurring event:', error)

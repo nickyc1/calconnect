@@ -1,5 +1,6 @@
 import { PipedreamClient } from '@pipedream/sdk';
 import { GoogleCalendarEvent } from './types';
+import { pipedreamRateLimiter } from '@/utils/rate-limiter';
 
 class PipedreamService {
   private client: PipedreamClient | null = null;
@@ -108,7 +109,7 @@ class PipedreamService {
   }
 
   /**
-   * Get calendar event via proxy
+   * Get calendar event via proxy (with rate limiting)
    */
   async getCalendarEvent(
     externalUserId: string,
@@ -119,17 +120,20 @@ class PipedreamService {
     const client = this.getClient();
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
 
-    const response = await client.proxy.get({
-      url,
-      externalUserId,
-      accountId
-    });
+    // Wrap in rate limiter to prevent hitting API Proxy limits
+    const response = await pipedreamRateLimiter.execute(() =>
+      client.proxy.get({
+        url,
+        externalUserId,
+        accountId
+      })
+    );
 
     return response as GoogleCalendarEvent;
   }
 
   /**
-   * Create mirror event via proxy
+   * Create mirror event via proxy (with rate limiting)
    */
   async createMirrorEvent(
     externalUserId: string,
@@ -171,12 +175,15 @@ class PipedreamService {
       mirrorData.extendedProperties.private.mircal_recurring_event_id = eventData.recurringEventId;
     }
 
-    const response = await client.proxy.post({
-      url,
-      externalUserId,
-      accountId,
-      body: mirrorData
-    });
+    // Wrap in rate limiter to prevent hitting API Proxy limits
+    const response = await pipedreamRateLimiter.execute(() =>
+      client.proxy.post({
+        url,
+        externalUserId,
+        accountId,
+        body: mirrorData
+      })
+    );
 
     return response as GoogleCalendarEvent;
   }
@@ -197,15 +204,18 @@ class PipedreamService {
     const client = this.getClient();
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
 
-    const response = await client.proxy.patch({
-      url,
-      externalUserId,
-      accountId,
-      body: {
-        start: eventData.start,
-        end: eventData.end
-      }
-    });
+    // Wrap in rate limiter to prevent hitting API Proxy limits
+    const response = await pipedreamRateLimiter.execute(() =>
+      client.proxy.patch({
+        url,
+        externalUserId,
+        accountId,
+        body: {
+          start: eventData.start,
+          end: eventData.end
+        }
+      })
+    );
 
     return response as GoogleCalendarEvent;
   }
@@ -222,11 +232,14 @@ class PipedreamService {
     const client = this.getClient();
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
 
-    await client.proxy.delete({
-      url,
-      externalUserId,
-      accountId
-    });
+    // Wrap in rate limiter to prevent hitting API Proxy limits
+    await pipedreamRateLimiter.execute(() =>
+      client.proxy.delete({
+        url,
+        externalUserId,
+        accountId
+      })
+    );
   }
 }
 

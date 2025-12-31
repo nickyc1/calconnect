@@ -118,6 +118,18 @@ EMIT_EVENTS_ON_DEPLOY=false
 # Higher values = less frequent checks = delayed deletion detection
 DELETED_EVENTS_POLL_INTERVAL_SECONDS=300
 
+# Maximum number of instances to create for recurring events
+# Prevents unbounded RRULE expansion that can cause rate limit issues
+# Default: 365 (one year of daily events)
+# Examples: 100 (conservative), 365 (1 year daily), 730 (2 years daily)
+MAX_RECURRING_INSTANCES=365
+
+# Maximum time window for recurring event instances (in years)
+# Limits recurring events to instances within next N years from today
+# Default: 2 years
+# Set to 0 to disable time-based limit (only use MAX_RECURRING_INSTANCES)
+MAX_RECURRING_YEARS=2
+
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
