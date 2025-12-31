@@ -73,18 +73,25 @@ export default function DashboardPage() {
         setStatus('Opening connection window...')
         window.open(`${data.connectLinkUrl}&app=google_calendar`, '_blank', 'width=500,height=600')
 
-        // Poll for new account (Bug #3 fix: store interval ID for cleanup)
+        // Poll for new account (Bug #3 fix: fetch fresh data and compare)
         let pollInterval: NodeJS.Timeout | null = null
         let pollTimeout: NodeJS.Timeout | null = null
+        const initialCount = accounts.length
 
         const startPolling = () => {
           pollInterval = setInterval(async () => {
-            const prevCount = accounts.length
-            await loadData()
+            // Fetch fresh accounts data directly
+            const accountsRes = await fetch('/api/accounts')
+            const accountsData = await accountsRes.json()
+            const currentCount = accountsData.accounts?.length || 0
+
             // Stop polling if new account detected
-            if (accounts.length > prevCount) {
+            if (currentCount > initialCount) {
               if (pollInterval) clearInterval(pollInterval)
               if (pollTimeout) clearTimeout(pollTimeout)
+
+              // Update UI with fresh data
+              await loadData()
               setActionLoading(false)
               setStatus('Account connected successfully!')
               setTimeout(() => setStatus(''), 3000)
