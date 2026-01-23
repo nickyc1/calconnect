@@ -92,9 +92,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if this is a new event or an update
+    // IMPORTANT: Fetch full mapping to validate source account ID
     const { data: existingMapping } = await supabaseAdmin
       .from('event_mappings')
-      .select('id')
+      .select('*')
       .eq('user_id', userId)
       .eq('source_event_id', eventId)
       .eq('source_calendar_id', calendarId)
@@ -102,7 +103,22 @@ export async function POST(request: NextRequest) {
 
     let result;
     if (existingMapping) {
-      // Event exists - this is an update
+      // Validate that webhook's accountId matches the mapping's source_account_id
+      // This prevents processing sync events from different source accounts
+      if ((existingMapping as any).source_account_id !== accountId) {
+        console.log(
+          `Skipping sync event: account mismatch. ` +
+          `Webhook from account ${accountId}, but mapping owned by ${(existingMapping as any).source_account_id}. ` +
+          `Event: ${eventId} (${(sourceEvent as any).summary || 'Untitled'})`
+        );
+        return NextResponse.json({
+          received: true,
+          skipped: 'account_mismatch',
+          message: 'Webhook from different source account than mapping. Likely a sync event during source deployment.'
+        });
+      }
+
+      // Account matches - this is a legitimate update
       console.log(`Event ${eventId} exists, processing as update`);
       result = await calendarSync.updateMirrorEvents(
         userId,
