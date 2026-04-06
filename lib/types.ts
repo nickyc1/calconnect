@@ -11,12 +11,17 @@ export interface User {
 export interface UserAccount {
   id: string;
   user_id: string;
-  pipedream_account_id: string;
-  account_email: string;
-  account_name?: string;
-  is_source: boolean;
+  account_id: string;
+  account_display_name: string;
+  google_email: string;
+  is_source_account: boolean;
+  is_active: boolean;
   calendar_id: string;
   color_id?: string;
+  refresh_token: string;
+  access_token: string;
+  token_expiry: string;
+  sync_token?: string;
   created_at: string;
 }
 
@@ -34,21 +39,24 @@ export interface EventMapping {
   source_account_id: string;
   source_calendar_id: string;
   mirrored_events: MirroredEvent[];
+  is_recurring: boolean;
+  recurring_event_id?: string;
   created_at: string;
   updated_at: string;
 }
 
-// Pipedream source types
-export interface PipedreamSource {
+// Watch channel types (replaces PipedreamSource)
+export interface WatchChannel {
   id: string;
   user_id: string;
-  source_id: string;
   account_id: string;
   calendar_id: string;
+  channel_id: string;
+  resource_id: string;
+  expiration: string;
   webhook_url: string;
-  status: 'active' | 'paused' | 'deleted';
+  sync_token?: string;
   created_at: string;
-  expires_at?: string;
 }
 
 // Webhook event types
@@ -65,6 +73,7 @@ export interface GoogleCalendarEvent {
   id: string;
   summary: string;
   description?: string;
+  status?: string;
   start: {
     dateTime?: string;
     date?: string;
@@ -87,19 +96,7 @@ export interface GoogleCalendarEvent {
     private?: Record<string, string>;
     shared?: Record<string, string>;
   };
+  recurrence?: string[];
   recurringEventId?: string;
   updated?: string;
-}
-
-// Webhook payload types
-export interface WebhookPayload {
-  event_id?: string;
-  external_user_id: string;
-  event_type: 'created' | 'updated' | 'deleted' | 'cancelled';
-  source_event_id: string;
-  source_account_id: string;
-  source_calendar_id: string;
-  google_resource_state?: string;
-  google_resource_id?: string;
-  google_channel_id?: string;
 }

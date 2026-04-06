@@ -17,7 +17,7 @@ export async function POST(
     const accountId = params.id
 
     // Verify user owns this account
-    const { data: account, error: accountError } = await supabaseAdmin
+    const { data: account, error: accountError } = await (supabaseAdmin as any)
       .from('user_accounts')
       .select('*')
       .eq('account_id', accountId)
@@ -29,7 +29,7 @@ export async function POST(
     }
 
     // Check if user already has active sources (mirroring is active)
-    const { data: activeSources } = await supabaseAdmin
+    const { data: activeSources } = await (supabaseAdmin as any)
       .from('pipedream_sources')
       .select('id')
       .eq('user_id', user.id)

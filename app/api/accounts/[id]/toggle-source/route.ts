@@ -1,28 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
-import { supabaseAdmin } from '@/lib/supabase'
-import { pipedream } from '@/lib/pipedream'
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase-server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { googleAuth } from '@/lib/google-auth';
+import { googleCalendar } from '@/lib/google-calendar';
 
+/**
+ * POST /api/accounts/[id]/toggle-source
+ * Toggle an account's source status. If mirroring is active,
+ * dynamically creates or stops watch channels.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const accountId = params.id
-    const body = await request.json()
-    const { isSource } = body // true or false
+    const accountId = params.id;
+    const body = await request.json();
+    const { isSource } = body;
 
     if (typeof isSource !== 'boolean') {
-      return NextResponse.json({
-        error: 'isSource must be a boolean'
-      }, { status: 400 })
+      return NextResponse.json({ error: 'isSource must be a boolean' }, { status: 400 });
     }
 
     // Verify user owns this account
@@ -31,136 +35,102 @@ export async function POST(
       .select('*')
       .eq('account_id', accountId)
       .eq('user_id', user.id)
-      .single()
+      .single();
 
     if (accountError || !account) {
-      return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
     // Check if mirroring is currently active
-    const { data: activeSources } = await (supabaseAdmin as any)
-      .from('pipedream_sources')
+    const { data: activeChannels } = await (supabaseAdmin as any)
+      .from('watch_channels')
       .select('id, account_id')
       .eq('user_id', user.id)
-      .limit(1)
+      .limit(1);
 
-    const mirroringActive = activeSources && activeSources.length > 0
+    const mirroringActive = activeChannels && activeChannels.length > 0;
 
-    // Update the account's source status
+    // Update the source status
     const { error: updateError } = await (supabaseAdmin as any)
       .from('user_accounts')
       .update({ is_source_account: isSource })
       .eq('account_id', accountId)
-      .eq('user_id', user.id)
+      .eq('user_id', user.id);
 
     if (updateError) {
-      console.error('Error toggling source:', updateError)
-      return NextResponse.json({
-        error: 'Failed to toggle source status'
-      }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to toggle source status' }, { status: 500 });
     }
 
-    // If mirroring is active, dynamically deploy or remove sources
+    // If mirroring is active, dynamically add/remove watch channels
     if (mirroringActive) {
       if (isSource) {
-        // User is enabling this account as a source while mirroring is active
-        // Deploy sources for this account
         try {
-          const webhookUrl = `${process.env.WEBHOOK_BASE_URL}/api/webhook?userId=${encodeURIComponent(user.id)}&accountId=${encodeURIComponent(accountId)}&calendarId=primary`
+          const auth = await googleAuth.getClientByAccountId(user.id, accountId);
+          const webhookUrl = `${process.env.WEBHOOK_BASE_URL}/api/webhook`;
 
-          // Deploy instant source
-          const instantSource = await pipedream.deploySource(
-            user.id,
-            accountId,
-            'primary',
-            webhookUrl
-          )
+          const watchResult = await googleCalendar.watchCalendar(auth, 'primary', webhookUrl);
+          const { nextSyncToken } = await googleCalendar.listChangedEvents(auth, 'primary');
 
-          // Deploy cancelled source (polling interval from env var)
-          const cancelledSource = await pipedream.deployCancelledEventSource(
-            user.id,
-            accountId,
-            'primary',
-            webhookUrl
-          )
-
-          // Store sources in database
           await (supabaseAdmin as any)
-            .from('pipedream_sources')
-            .insert([
-              {
-                user_id: user.id,
-                account_id: accountId,
-                source_id: instantSource.data.id,
-                calendar_id: 'primary',
-                webhook_url: webhookUrl,
-                source_type: 'instant'
-              },
-              {
-                user_id: user.id,
-                account_id: accountId,
-                source_id: cancelledSource.data.id,
-                calendar_id: 'primary',
-                webhook_url: webhookUrl,
-                source_type: 'cancelled'
-              }
-            ])
+            .from('watch_channels')
+            .insert({
+              user_id: user.id,
+              account_id: accountId,
+              calendar_id: 'primary',
+              channel_id: watchResult.channelId,
+              resource_id: watchResult.resourceId,
+              expiration: watchResult.expiration,
+              webhook_url: webhookUrl,
+              sync_token: nextSyncToken,
+            } as any);
 
-          console.log(`Deployed sources for newly enabled source account: ${accountId}`)
+          console.log(`Watch channel created for newly enabled source: ${accountId}`);
         } catch (deployError) {
-          console.error('Error deploying sources for new source account:', deployError)
-          // Revert the is_source_account change
+          console.error('Error creating watch for new source:', deployError);
+          // Revert
           await (supabaseAdmin as any)
             .from('user_accounts')
             .update({ is_source_account: false })
-            .eq('account_id', accountId)
+            .eq('account_id', accountId);
 
-          return NextResponse.json({
-            error: 'Failed to deploy sources for this account'
-          }, { status: 500 })
+          return NextResponse.json({ error: 'Failed to set up watch for this account' }, { status: 500 });
         }
       } else {
-        // User is disabling this account as a source while mirroring is active
-        // Remove sources for this account
+        // Remove watch channels for this account
         try {
-          // Get sources for this account
-          const { data: sourcesToRemove } = await (supabaseAdmin as any)
-            .from('pipedream_sources')
+          const { data: channelsToRemove } = await (supabaseAdmin as any)
+            .from('watch_channels')
             .select('*')
             .eq('user_id', user.id)
-            .eq('account_id', accountId)
+            .eq('account_id', accountId);
 
-          if (sourcesToRemove && sourcesToRemove.length > 0) {
-            // Delete sources from Pipedream
-            const deletePromises = sourcesToRemove.map((source: any) =>
-              pipedream.deleteSource(source.source_id, user.id).catch(err => {
-                console.error(`Failed to delete source ${source.source_id}:`, err)
-                return null
-              })
-            )
+          if (channelsToRemove && channelsToRemove.length > 0) {
+            for (const ch of channelsToRemove) {
+              try {
+                const auth = await googleAuth.getClientByAccountId(user.id, accountId);
+                await googleCalendar.stopWatch(auth, (ch as any).channel_id, (ch as any).resource_id);
+              } catch {
+                // Channel may be expired
+              }
+            }
 
-            await Promise.all(deletePromises)
-
-            // Delete from database
             await (supabaseAdmin as any)
-              .from('pipedream_sources')
+              .from('watch_channels')
               .delete()
               .eq('user_id', user.id)
-              .eq('account_id', accountId)
+              .eq('account_id', accountId);
 
-            console.log(`Removed sources for disabled source account: ${accountId}`)
+            console.log(`Watch channels removed for disabled source: ${accountId}`);
           }
         } catch (removeError) {
-          console.error('Error removing sources:', removeError)
-          // Don't revert - user wanted to disable, we tried to clean up
-          // Worst case: sources remain in Pipedream but account marked as non-source
+          console.error('Error removing watch channels:', removeError);
         }
       }
     }
 
-    return NextResponse.json({ success: true, isSource })
+    return NextResponse.json({ success: true, isSource });
   } catch (error: any) {
-    console.error('Error toggling source account:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('Error toggling source account:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

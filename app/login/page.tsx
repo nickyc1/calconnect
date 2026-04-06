@@ -47,9 +47,9 @@ export default function LoginPage() {
         maxWidth: '400px',
         textAlign: 'center'
       }}>
-        <h1 style={{ marginBottom: '0.5rem' }}>MirCal</h1>
+        <h1 style={{ marginBottom: '0.5rem' }}>CalConnect</h1>
         <p style={{ color: '#666', marginBottom: '2rem' }}>
-          Calendar Mirroring Made Simple
+          Mirror your Google Calendars. Stay available everywhere.
         </p>
 
         {error && (

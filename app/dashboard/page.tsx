@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { useSearchParams } from 'next/navigation'
 
 interface Account {
   id: string
   account_id: string
   account_display_name: string
+  google_email: string
   is_active: boolean
   is_source_account: boolean
 }
@@ -16,6 +18,7 @@ interface Source {
   source_id: string
   source_type: string
   account_id: string
+  expiration?: string
 }
 
 export default function DashboardPage() {
@@ -24,7 +27,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [status, setStatus] = useState('')
-  const [userId, setUserId] = useState<string | null>(null)
+  const searchParams = useSearchParams()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,23 +36,31 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData()
+
+    // Check for URL params from OAuth callback
+    const success = searchParams.get('success')
+    const error = searchParams.get('error')
+    if (success === 'account_connected') {
+      setStatus('Account connected successfully!')
+      setTimeout(() => setStatus(''), 3000)
+    } else if (success === 'account_updated') {
+      setStatus('Account tokens refreshed!')
+      setTimeout(() => setStatus(''), 3000)
+    } else if (error) {
+      setStatus(`Error: ${error.replace(/_/g, ' ')}`)
+    }
   }, [])
 
   const loadData = async () => {
     setLoading(true)
 
-    // Get current user
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    setUserId(user.id)
-
-    // Load accounts
     const accountsRes = await fetch('/api/accounts')
     const accountsData = await accountsRes.json()
     setAccounts(accountsData.accounts || [])
 
-    // Load sources
     const sourcesRes = await fetch('/api/sources')
     const sourcesData = await sourcesRes.json()
     setSources(sourcesData.sources || [])
@@ -57,61 +68,9 @@ export default function DashboardPage() {
     setLoading(false)
   }
 
-  const connectAccount = async () => {
-    setActionLoading(true)
-    setStatus('Generating connect token...')
-
-    try {
-      const res = await fetch('/api/connect/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      })
-      const data = await res.json()
-
-      if (data.connectLinkUrl) {
-        setStatus('Opening connection window...')
-        window.open(`${data.connectLinkUrl}&app=google_calendar`, '_blank', 'width=500,height=600')
-
-        // Poll for new account (Bug #3 fix: fetch fresh data and compare)
-        let pollInterval: NodeJS.Timeout | null = null
-        let pollTimeout: NodeJS.Timeout | null = null
-        const initialCount = accounts.length
-
-        const startPolling = () => {
-          pollInterval = setInterval(async () => {
-            // Fetch fresh accounts data directly
-            const accountsRes = await fetch('/api/accounts')
-            const accountsData = await accountsRes.json()
-            const currentCount = accountsData.accounts?.length || 0
-
-            // Stop polling if new account detected
-            if (currentCount > initialCount) {
-              if (pollInterval) clearInterval(pollInterval)
-              if (pollTimeout) clearTimeout(pollTimeout)
-
-              // Update UI with fresh data
-              await loadData()
-              setActionLoading(false)
-              setStatus('Account connected successfully!')
-              setTimeout(() => setStatus(''), 3000)
-            }
-          }, 3000)
-
-          // Stop polling after 2 minutes
-          pollTimeout = setTimeout(() => {
-            if (pollInterval) clearInterval(pollInterval)
-            setActionLoading(false)
-            setStatus('')
-          }, 120000)
-        }
-
-        startPolling()
-      }
-    } catch (error: any) {
-      setStatus(`Error: ${error.message}`)
-      setActionLoading(false)
-    }
+  const connectAccount = () => {
+    // Redirect to Google OAuth consent screen
+    window.location.href = '/api/auth/google/connect'
   }
 
   const toggleSourceAccount = async (accountId: string, isSource: boolean) => {
@@ -141,9 +100,6 @@ export default function DashboardPage() {
   }
 
   const activateMirroring = async () => {
-    // Validate: need at least 2 accounts and at least 1 source
-    // Note: All sources can also be destinations for other sources
-    // (events from source A mirror to source B and vice versa)
     const sourceAccounts = accounts.filter(a => a.is_source_account)
 
     if (accounts.length < 2) {
@@ -160,13 +116,11 @@ export default function DashboardPage() {
     setStatus('Activating mirroring...')
 
     try {
-      const res = await fetch('/api/mirroring/activate', {
-        method: 'POST'
-      })
+      const res = await fetch('/api/mirroring/activate', { method: 'POST' })
       const data = await res.json()
 
       if (data.success) {
-        setStatus(`Mirroring activated! ${data.sourcesDeployed || 0} sources deployed.`)
+        setStatus(`Mirroring activated! ${data.watchChannelsCreated || 0} watch channel(s) created.`)
         await loadData()
         setTimeout(() => setStatus(''), 3000)
       } else {
@@ -184,9 +138,7 @@ export default function DashboardPage() {
     setStatus('Deactivating mirroring...')
 
     try {
-      const res = await fetch('/api/mirroring/deactivate', {
-        method: 'POST'
-      })
+      const res = await fetch('/api/mirroring/deactivate', { method: 'POST' })
       const data = await res.json()
 
       if (data.success) {
@@ -211,9 +163,7 @@ export default function DashboardPage() {
     setStatus('Removing account...')
 
     try {
-      const res = await fetch(`/api/accounts/${accountId}`, {
-        method: 'DELETE'
-      })
+      const res = await fetch(`/api/accounts/${accountId}`, { method: 'DELETE' })
       const data = await res.json()
 
       if (data.success) {
@@ -230,17 +180,41 @@ export default function DashboardPage() {
     setActionLoading(false)
   }
 
+  const signOut = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
   const sourceAccounts = accounts.filter(a => a.is_source_account)
-  const destinationAccounts = accounts.filter(a => !a.is_source_account)
   const hasActiveSources = sources.length > 0
 
   if (loading) {
-    return <div>Loading...</div>
+    return (
+      <div style={{ maxWidth: '800px', margin: '4rem auto', textAlign: 'center', color: '#666' }}>
+        Loading...
+      </div>
+    )
   }
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <h2>Calendar Mirroring</h2>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem 1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h2 style={{ margin: 0 }}>CalConnect</h2>
+        <button
+          onClick={signOut}
+          style={{
+            padding: '0.5rem 1rem',
+            background: 'transparent',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            color: '#666',
+            fontSize: '0.85rem'
+          }}
+        >
+          Sign out
+        </button>
+      </div>
 
       {/* Status Message */}
       {status && (
@@ -260,12 +234,13 @@ export default function DashboardPage() {
         background: 'white',
         padding: '1.5rem',
         borderRadius: '8px',
-        marginBottom: '1rem'
+        marginBottom: '1rem',
+        border: '1px solid #e5e7eb'
       }}>
-        <h3 style={{ marginTop: 0 }}>Connected Accounts ({accounts.length}/3)</h3>
+        <h3 style={{ marginTop: 0 }}>Connected Accounts ({accounts.length}/5)</h3>
 
         {accounts.length === 0 ? (
-          <p style={{ color: '#666' }}>No accounts connected yet.</p>
+          <p style={{ color: '#666' }}>No accounts connected yet. Connect your Google Calendar accounts to get started.</p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {accounts.map(account => (
@@ -279,7 +254,7 @@ export default function DashboardPage() {
                 alignItems: 'center'
               }}>
                 <div style={{ flex: 1 }}>
-                  <strong>{account.account_display_name || account.account_id}</strong>
+                  <strong>{account.google_email || account.account_display_name || account.account_id}</strong>
                   {account.is_source_account && (
                     <span style={{
                       marginLeft: '0.5rem',
@@ -305,19 +280,12 @@ export default function DashboardPage() {
                       checked={account.is_source_account}
                       onChange={(e) => toggleSourceAccount(account.account_id, e.target.checked)}
                       disabled={actionLoading}
-                      style={{
-                        marginRight: '0.5rem',
-                        width: '18px',
-                        height: '18px',
-                        cursor: actionLoading ? 'not-allowed' : 'pointer'
-                      }}
+                      style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: actionLoading ? 'not-allowed' : 'pointer' }}
                     />
-                    <span style={{ fontSize: '0.9rem', color: '#666' }}>
-                      Use as source calendar
-                    </span>
+                    <span style={{ fontSize: '0.9rem', color: '#666' }}>Source</span>
                   </label>
                   <button
-                    onClick={() => removeAccount(account.account_id, account.account_display_name || account.account_id)}
+                    onClick={() => removeAccount(account.account_id, account.google_email || account.account_display_name || account.account_id)}
                     disabled={actionLoading || hasActiveSources}
                     style={{
                       padding: '0.4rem 0.8rem',
@@ -339,7 +307,7 @@ export default function DashboardPage() {
           </ul>
         )}
 
-        {accounts.length < 3 && (
+        {accounts.length < 5 && (
           <button
             onClick={connectAccount}
             disabled={actionLoading}
@@ -353,7 +321,7 @@ export default function DashboardPage() {
               opacity: actionLoading ? 0.7 : 1
             }}
           >
-            Connect Google Calendar
+            + Connect Google Calendar
           </button>
         )}
       </div>
@@ -363,7 +331,8 @@ export default function DashboardPage() {
         background: 'white',
         padding: '1.5rem',
         borderRadius: '8px',
-        marginBottom: '1rem'
+        marginBottom: '1rem',
+        border: '1px solid #e5e7eb'
       }}>
         <h3 style={{ marginTop: 0 }}>Mirroring Status</h3>
 
@@ -381,7 +350,7 @@ export default function DashboardPage() {
               </p>
               {sourceAccounts.length > 0 && (
                 <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
-                  <strong>Sources:</strong> {sourceAccounts.map(a => a.account_display_name || a.account_id).join(', ')}
+                  <strong>Sources:</strong> {sourceAccounts.map(a => a.google_email || a.account_display_name || a.account_id).join(', ')}
                 </div>
               )}
             </div>
@@ -416,11 +385,6 @@ export default function DashboardPage() {
                     ? 'Select at least one source account to enable mirroring.'
                     : 'Ready to enable mirroring.'}
               </p>
-              {sourceAccounts.length > 0 && accounts.length >= 2 && (
-                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', color: '#666' }}>
-                  {sourceAccounts.length} source(s) → {accounts.length - 1} destination(s) per source
-                </p>
-              )}
             </div>
             {accounts.length >= 2 && sourceAccounts.length > 0 && (
               <button
@@ -442,21 +406,22 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Info */}
+      {/* How it works */}
       <div style={{
         background: 'white',
         padding: '1.5rem',
         borderRadius: '8px',
         fontSize: '0.9rem',
-        color: '#666'
+        color: '#666',
+        border: '1px solid #e5e7eb'
       }}>
         <h4 style={{ marginTop: 0, color: '#333' }}>How it works</h4>
         <ol style={{ paddingLeft: '1.25rem' }}>
-          <li>Connect 2-3 Google Calendar accounts</li>
-          <li>Select one or more accounts as "source" calendars using checkboxes</li>
+          <li>Connect 2 or more Google Calendar accounts</li>
+          <li>Select which accounts are "source" calendars</li>
           <li>Enable mirroring</li>
-          <li>Events created in any source calendar automatically appear as "Busy" in all other calendars (including other sources)</li>
-          <li>Events mirror to all accounts except the one where the event originated</li>
+          <li>Events in source calendars automatically appear as "Busy" in all other calendars</li>
+          <li>Deletions and updates sync automatically</li>
         </ol>
       </div>
     </div>

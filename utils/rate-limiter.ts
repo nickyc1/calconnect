@@ -201,4 +201,5 @@ export class RateLimiter {
 }
 
 // Singleton instance for global use
-export const pipedreamRateLimiter = new RateLimiter()
+export const rateLimiter = new RateLimiter()
+export const pipedreamRateLimiter = rateLimiter // backward compat alias

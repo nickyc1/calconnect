@@ -22,7 +22,7 @@ export default async function DashboardLayout({
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <h1 style={{ margin: 0, fontSize: '1.25rem' }}>MirCal</h1>
+        <h1 style={{ margin: 0, fontSize: '1.25rem' }}>CalConnect</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span style={{ color: '#666' }}>{user.email}</span>
           <form action="/auth/signout" method="post">

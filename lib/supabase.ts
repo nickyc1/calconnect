@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { User, UserAccount, EventMapping, PipedreamSource, WebhookEvent } from './types';
+import { User, UserAccount, EventMapping, WatchChannel, WebhookEvent } from './types';
 
 // Database schema types
 export interface Database {
@@ -20,10 +20,10 @@ export interface Database {
         Insert: Omit<EventMapping, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<EventMapping, 'id' | 'created_at'>>;
       };
-      pipedream_sources: {
-        Row: PipedreamSource;
-        Insert: Omit<PipedreamSource, 'id' | 'created_at'>;
-        Update: Partial<Omit<PipedreamSource, 'id' | 'created_at'>>;
+      watch_channels: {
+        Row: WatchChannel;
+        Insert: Omit<WatchChannel, 'id' | 'created_at'>;
+        Update: Partial<Omit<WatchChannel, 'id' | 'created_at'>>;
       };
       webhook_events: {
         Row: WebhookEvent;
@@ -45,7 +45,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, 
   }
 });
 
-// Alias for consistency with POC guide
+// Alias for consistency
 export const supabaseAdmin = supabase;
 
 // Create Supabase client with anon key (for frontend operations)

@@ -1,154 +1,165 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { pipedream } from '@/lib/pipedream';
+import { googleAuth } from '@/lib/google-auth';
+import { googleCalendar } from '@/lib/google-calendar';
 import { calendarSync } from '@/lib/calendar-sync';
 
+/**
+ * POST /api/webhook
+ *
+ * Receives Google Calendar push notifications.
+ * Google sends headers (not body) to tell us something changed:
+ *   X-Goog-Channel-ID: our channel ID
+ *   X-Goog-Resource-ID: the resource being watched
+ *   X-Goog-Resource-State: "sync" | "exists" | "not_exists"
+ *
+ * On "exists": use incremental sync (syncToken) to get changed events,
+ * then process creates/updates/deletes.
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Extract metadata from query parameters
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const accountId = searchParams.get('accountId');
-    const calendarId = searchParams.get('calendarId');
+    const channelId = request.headers.get('x-goog-channel-id');
+    const resourceId = request.headers.get('x-goog-resource-id');
+    const resourceState = request.headers.get('x-goog-resource-state');
 
-    if (!userId || !accountId || !calendarId) {
-      console.error('Missing required query parameters');
-      return NextResponse.json({
-        error: 'Missing userId, accountId, or calendarId in query parameters'
-      }, { status: 400 });
+    // Validate this is a real Google push notification
+    if (!channelId || !resourceState) {
+      return NextResponse.json({ error: 'Missing Google headers' }, { status: 400 });
     }
 
-    // Parse the raw Google Calendar event payload
-    const event = await request.json();
+    console.log(`Webhook: channel=${channelId} state=${resourceState}`);
 
-    console.log('Webhook received:', JSON.stringify(event, null, 2));
-    console.log('Metadata from query params:', { userId, accountId, calendarId });
-
-    // Log webhook event for debugging
-    await (supabaseAdmin as any).from('webhook_events').insert({
-      event_type: 'calendar_event',
-      payload: event,
-      processed: false
-    });
-
-    const eventId = event.id;
-
-    if (!eventId) {
-      console.warn('No event ID in payload');
+    // "sync" is sent when the watch channel is first created -- just acknowledge
+    if (resourceState === 'sync') {
+      console.log('Watch channel sync confirmation received');
       return NextResponse.json({ received: true });
     }
 
-    // Fetch full event details from Google Calendar
-    let sourceEvent;
-    try {
-      sourceEvent = await pipedream.getCalendarEvent(
-        userId,
-        accountId,
-        calendarId,
-        eventId
-      );
-    } catch (error: any) {
-      // 404 or 410 means event was deleted
-      if (error.status === 404 || error.status === 410) {
-        console.log(`Event ${eventId} deleted (${error.status}), processing deletion`);
-        await calendarSync.handleEventDeleted(userId, userId, eventId, calendarId);
-        return NextResponse.json({ received: true, processed: true, action: 'deleted' });
-      }
-      throw error; // Re-throw other errors
+    // Look up the watch channel to find the user/account
+    const { data: channel, error: channelError } = await (supabaseAdmin as any)
+      .from('watch_channels')
+      .select('*')
+      .eq('channel_id', channelId)
+      .single();
+
+    if (channelError || !channel) {
+      console.error('Unknown channel ID:', channelId);
+      return NextResponse.json({ error: 'Unknown channel' }, { status: 404 });
     }
 
-    // Skip if this is already a mirror event (check BEFORE processing deletion)
-    if ((sourceEvent as any).extendedProperties?.private?.mircal_is_mirror === 'true') {
-      console.log('Skipping mirror event');
-      return NextResponse.json({ received: true, skipped: 'mirror_event' });
+    const { user_id: userId, account_id: accountId, calendar_id: calendarId } = channel as any;
+
+    // Get the sync token for incremental sync
+    const currentSyncToken = (channel as any).sync_token || undefined;
+
+    // Get authenticated client for this account
+    const auth = await googleAuth.getClientByAccountId(userId, accountId);
+
+    // Fetch changed events using incremental sync
+    const { events: changedEvents, nextSyncToken } =
+      await googleCalendar.listChangedEvents(auth, calendarId, currentSyncToken);
+
+    // Store the new sync token for next time
+    if (nextSyncToken) {
+      await (supabaseAdmin as any)
+        .from('watch_channels')
+        .update({ sync_token: nextSyncToken } as any)
+        .eq('channel_id', channelId);
     }
 
-    // Check if event was cancelled (soft delete)
-    if ((sourceEvent as any).status === 'cancelled') {
-      console.log(`Event ${eventId} cancelled, processing deletion`);
-      await calendarSync.handleEventDeleted(userId, userId, eventId, calendarId);
-      return NextResponse.json({ received: true, processed: true, action: 'deleted' });
+    if (changedEvents.length === 0) {
+      console.log('No changed events in this notification');
+      return NextResponse.json({ received: true, changes: 0 });
     }
 
-    // Get destination accounts for this event
-    // = ALL user accounts EXCEPT the one the event originated from
-    // This means events can mirror TO other source accounts (but never to origin)
-    const { data: destAccounts, error: accountsError } = await supabaseAdmin
+    console.log(`Processing ${changedEvents.length} changed event(s) for user ${userId}`);
+
+    // Get destination accounts (all except the source of this notification)
+    const { data: allAccounts } = await (supabaseAdmin as any)
       .from('user_accounts')
       .select('*')
       .eq('user_id', userId)
-      .eq('is_active', true)
-      .neq('account_id', accountId); // Exclude originating account
+      .eq('is_active', true);
 
-    console.log(`Found ${destAccounts?.length || 0} destination account(s) for user ${userId}`);
+    const destAccounts = (allAccounts || []).filter(
+      (a: any) => a.account_id !== accountId
+    );
 
-    if (accountsError || !destAccounts || destAccounts.length === 0) {
-      console.log(`No destination accounts found for user ${userId}. Originating account: ${accountId}. User needs to connect additional accounts to enable mirroring.`);
-      return NextResponse.json({
-        received: true,
-        skipped: 'no_destinations',
-        message: 'No destination accounts (all mirrors would be to origin). Event not mirrored.'
-      });
-    }
+    // Process each changed event
+    let created = 0;
+    let updated = 0;
+    let deleted = 0;
 
-    // Check if this is a new event or an update
-    // IMPORTANT: Fetch full mapping to validate source account ID
-    const { data: existingMapping } = await supabaseAdmin
-      .from('event_mappings')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('source_event_id', eventId)
-      .eq('source_calendar_id', calendarId)
-      .maybeSingle();
+    for (const event of changedEvents) {
+      try {
+        const eventId = (event as any).id;
+        if (!eventId) continue;
 
-    let result;
-    if (existingMapping) {
-      // Validate that webhook's accountId matches the mapping's source_account_id
-      // This prevents processing sync events from different source accounts
-      if ((existingMapping as any).source_account_id !== accountId) {
-        console.log(
-          `Skipping sync event: account mismatch. ` +
-          `Webhook from account ${accountId}, but mapping owned by ${(existingMapping as any).source_account_id}. ` +
-          `Event: ${eventId} (${(sourceEvent as any).summary || 'Untitled'})`
-        );
-        return NextResponse.json({
-          received: true,
-          skipped: 'account_mismatch',
-          message: 'Webhook from different source account than mapping. Likely a sync event during source deployment.'
-        });
+        // Skip mirror events (prevent infinite loops)
+        if ((event as any).extendedProperties?.private?.calconnect_is_mirror === 'true') {
+          continue;
+        }
+
+        // Handle cancelled/deleted events
+        if ((event as any).status === 'cancelled') {
+          await calendarSync.handleEventDeleted(
+            userId,
+            userId, // externalUserId is the same now
+            eventId,
+            calendarId
+          );
+          deleted++;
+          continue;
+        }
+
+        // Check if this event already has a mapping (update vs create)
+        const { data: existingMapping } = await (supabaseAdmin as any)
+          .from('event_mappings')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('source_event_id', eventId)
+          .eq('source_calendar_id', calendarId)
+          .maybeSingle();
+
+        if (existingMapping) {
+          // Validate source account matches
+          if ((existingMapping as any).source_account_id !== accountId) {
+            continue; // Skip sync events from other accounts
+          }
+
+          await calendarSync.updateMirrorEvents(
+            userId,
+            eventId,
+            calendarId,
+            event
+          );
+          updated++;
+        } else {
+          // New event -- create mirrors
+          if (destAccounts.length > 0) {
+            await calendarSync.createMirrorEvents(
+              userId,
+              accountId,
+              calendarId,
+              event,
+              destAccounts
+            );
+            created++;
+          }
+        }
+      } catch (eventError: any) {
+        console.error(`Error processing event ${(event as any).id}:`, eventError.message);
       }
-
-      // Account matches - this is a legitimate update
-      console.log(`Event ${eventId} exists, processing as update`);
-      result = await calendarSync.updateMirrorEvents(
-        userId,
-        eventId,
-        calendarId,
-        sourceEvent
-      );
-    } else {
-      // New event - create mirrors
-      console.log(`Event ${eventId} is new, creating mirrors`);
-      result = await calendarSync.createMirrorEvents(
-        userId,
-        accountId,
-        calendarId,
-        sourceEvent,
-        destAccounts
-      );
     }
 
-    // Mark webhook as processed
-    await (supabaseAdmin as any)
-      .from('webhook_events')
-      .update({ processed: true, processed_at: new Date().toISOString() })
-      .eq('payload->event->id', eventId);
+    console.log(`Webhook processed: ${created} created, ${updated} updated, ${deleted} deleted`);
 
     return NextResponse.json({
       received: true,
-      processed: true,
-      mirrors_created: result.successful.length,
-      mirrors_failed: result.failed.length
+      processed: changedEvents.length,
+      created,
+      updated,
+      deleted,
     });
   } catch (error: any) {
     console.error('Error processing webhook:', error);
