@@ -3,6 +3,9 @@ import { OAuth2Client } from 'google-auth-library';
 import { supabaseAdmin } from './supabase';
 
 const SCOPES = [
+  'openid',
+  'email',
+  'profile',
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/calendar.events',
 ];
