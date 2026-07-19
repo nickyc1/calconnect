@@ -45,7 +45,7 @@ const STYLES = `
 .landing .btn-accent:hover { background: #c14b1e; color: white; }
 
 .landing .hero { padding: 40px 0 32px; display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; }
-@media (min-width: 900px) { .landing .hero { grid-template-columns: minmax(0, 460px) 1fr; gap: 56px; padding: 72px 0 56px; } }
+@media (min-width: 900px) { .landing .hero { grid-template-columns: minmax(0, 340px) 1fr; gap: 56px; padding: 72px 0 56px; } }
 
 .landing .h-status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); margin-bottom: 24px; font-weight: 500; }
 .landing .h-status::before { content: ''; width: 7px; height: 7px; background: #10b981; border-radius: 50%; box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
