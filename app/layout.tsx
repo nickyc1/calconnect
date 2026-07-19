@@ -1,6 +1,6 @@
-import { Fraunces, Inter } from 'next/font/google'
+import { Gelasio, Inter } from 'next/font/google'
 
-const fraunces = Fraunces({
+const gelasio = Gelasio({
   weight: ['400', '500'],
   style: ['normal', 'italic'],
   subsets: ['latin'],
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
+    <html lang="en" className={`${gelasio.variable} ${inter.variable}`}>
       <body style={{ margin: 0 }}>{children}</body>
     </html>
   )
