@@ -1,10 +1,10 @@
-import { Instrument_Serif, Inter } from 'next/font/google'
+import { Fraunces, Inter } from 'next/font/google'
 
-const instrumentSerif = Instrument_Serif({
-  weight: '400',
+const fraunces = Fraunces({
+  weight: ['400', '500'],
   style: ['normal', 'italic'],
   subsets: ['latin'],
-  variable: '--font-instrument-serif',
+  variable: '--font-serif-display',
   display: 'swap',
 })
 
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${instrumentSerif.variable} ${inter.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
       <body style={{ margin: 0 }}>{children}</body>
     </html>
   )

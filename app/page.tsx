@@ -16,7 +16,7 @@ const CSS = `
   --border: rgba(28,27,22,0.08);
   --border-strong: rgba(28,27,22,0.16);
   --accent: #de5b28;
-  --serif: var(--font-instrument-serif), 'Iowan Old Style', Georgia, serif;
+  --serif: var(--font-serif-display), 'Iowan Old Style', Georgia, serif;
   --sans: var(--font-inter), 'Inter', system-ui, sans-serif;
 
   background: var(--bg);
