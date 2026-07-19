@@ -42,8 +42,8 @@ const CSS = `
 @media (min-width: 800px) { .cc-v5-nav-menu { display: flex; } }
 .cc-v5-btn { font-family: var(--sans); font-size: 14px; font-weight: 500; padding: 8px 16px; background: transparent; color: var(--text); border: 0.5px solid var(--border-strong); border-radius: 999px; cursor: pointer; transition: background 150ms; display: inline-block; }
 .cc-v5-btn:hover { background: var(--tint); }
-.cc-v5-btn-solid { background: var(--deep); color: var(--bg); border-color: var(--deep); padding: 10px 20px; }
-.cc-v5-btn-solid:hover { background: #2a2a20; color: var(--bg); }
+.cc-v5-btn-solid { background: var(--deep); color: #f7f5ee !important; border-color: var(--deep); padding: 10px 20px; }
+.cc-v5-btn-solid:hover { background: #2a2a20; color: #f7f5ee !important; }
 .cc-v5-btn-accent { background: var(--accent); color: white; border-color: var(--accent); }
 .cc-v5-btn-accent:hover { background: #c14b1e; color: white; }
 
