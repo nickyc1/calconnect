@@ -94,10 +94,10 @@ const CSS = `
 .cc-v5-section.cc-v5-dark .cc-v5-text-mute { color: rgba(247,245,238,0.6); }
 .cc-v5-section.cc-v5-tint { background: var(--tint); }
 
-.cc-v5 h2 { font-family: var(--serif); font-size: clamp(34px, 5vw, 54px); line-height: 1.05; letter-spacing: -0.02em; font-weight: 400; font-synthesis-weight: none; margin-bottom: 20px; max-width: 720px; color: var(--deep); }
+.cc-v5 h2 { font-family: var(--serif); font-size: clamp(34px, 5vw, 54px); line-height: 1.05; letter-spacing: -0.02em; font-weight: 400; font-synthesis-weight: none; margin-bottom: 20px; max-width: 1100px; color: var(--deep); }
 .cc-v5 h2 em { font-style: italic; color: var(--accent); }
 .cc-v5 h2 .cc-v5-m { color: var(--text-3); }
-.cc-v5-sec-lede { font-size: 18px; line-height: 1.55; color: var(--text-2); max-width: 560px; margin-bottom: 56px; }
+.cc-v5-sec-lede { font-size: 18px; line-height: 1.55; color: var(--text-2); max-width: 780px; margin-bottom: 56px; }
 
 /* FEATURES */
 .cc-v5-grid-3 { display: grid; grid-template-columns: 1fr; gap: 12px; }
