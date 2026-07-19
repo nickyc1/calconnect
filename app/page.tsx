@@ -5,8 +5,6 @@ import { getUser } from '@/lib/supabase-server'
 // No scoping prefix. Class names identical to artifact.
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap');
-
 .cc-v5 {
   --bg: #f7f5ee;
   --panel: #ffffff;
@@ -18,8 +16,8 @@ const CSS = `
   --border: rgba(28,27,22,0.08);
   --border-strong: rgba(28,27,22,0.16);
   --accent: #de5b28;
-  --serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
-  --sans: 'Inter', system-ui, sans-serif;
+  --serif: var(--font-instrument-serif), 'Iowan Old Style', Georgia, serif;
+  --sans: var(--font-inter), 'Inter', system-ui, sans-serif;
 
   background: var(--bg);
   color: var(--text);
