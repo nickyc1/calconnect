@@ -27,6 +27,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [status, setStatus] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [userEmail, setUserEmail] = useState('')
   const searchParams = useSearchParams()
 
   const supabase = createBrowserClient(
@@ -56,6 +61,7 @@ export default function DashboardPage() {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    setUserEmail(user.email || '')
 
     const accountsRes = await fetch('/api/accounts')
     const accountsData = await accountsRes.json()
@@ -178,6 +184,34 @@ export default function DashboardPage() {
     }
 
     setActionLoading(false)
+  }
+
+  const deleteAccount = async () => {
+    if (deleteConfirmEmail.toLowerCase() !== userEmail.toLowerCase()) {
+      setDeleteError('Email does not match your account email.')
+      return
+    }
+    setDeleteLoading(true)
+    setDeleteError('')
+    try {
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEmail: deleteConfirmEmail }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setDeleteError(data?.error || 'Deletion failed. Contact support.')
+        setDeleteLoading(false)
+        return
+      }
+      // Sign out the (now-deleted) session and land on the marketing site.
+      await supabase.auth.signOut()
+      window.location.href = '/?deleted=1'
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Deletion failed. Contact support.')
+      setDeleteLoading(false)
+    }
   }
 
   const signOut = async () => {
@@ -452,6 +486,112 @@ export default function DashboardPage() {
           <li>Deletions and updates sync automatically</li>
         </ol>
       </div>
+
+      {/* Danger Zone */}
+      <div style={{
+        marginTop: '2rem',
+        background: 'white',
+        padding: '1.5rem',
+        borderRadius: '8px',
+        border: '1px solid #f3d0d0',
+      }}>
+        <h4 style={{ marginTop: 0, color: '#a11616', fontSize: '0.95rem' }}>Danger zone</h4>
+        <p style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', color: '#666', lineHeight: 1.5 }}>
+          Deleting your account stops all mirroring, revokes CalConnect&apos;s access to
+          your Google calendars, and permanently removes your data. Mirrored &quot;Busy&quot;
+          blocks already written to your other calendars will stay — bulk-delete them
+          in Google Calendar if you want them gone.
+        </p>
+        <button
+          onClick={() => { setShowDeleteModal(true); setDeleteError(''); setDeleteConfirmEmail(''); }}
+          disabled={deleteLoading}
+          style={{
+            padding: '0.5rem 1rem',
+            background: 'transparent',
+            border: '1px solid #a11616',
+            borderRadius: '4px',
+            color: '#a11616',
+            fontSize: '0.85rem',
+            cursor: deleteLoading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          Delete my account
+        </button>
+      </div>
+
+      {showDeleteModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 50, padding: '1rem',
+          }}
+        >
+          <div style={{
+            background: 'white', borderRadius: '10px', padding: '1.75rem',
+            maxWidth: '440px', width: '100%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+          }}>
+            <h3 style={{ margin: '0 0 0.5rem', color: '#14140f', fontSize: '1.1rem' }}>
+              Delete your CalConnect account?
+            </h3>
+            <p style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: '#4a4a45', lineHeight: 1.5 }}>
+              This will stop all mirroring, revoke Google access, and delete every row
+              tied to your account. This can&apos;t be undone.
+            </p>
+            <p style={{ margin: '0 0 0.4rem', fontSize: '0.85rem', color: '#4a4a45' }}>
+              Type <strong>{userEmail}</strong> to confirm:
+            </p>
+            <input
+              type="email"
+              value={deleteConfirmEmail}
+              onChange={(e) => { setDeleteConfirmEmail(e.target.value); setDeleteError(''); }}
+              placeholder={userEmail}
+              autoComplete="off"
+              spellCheck={false}
+              style={{
+                width: '100%', padding: '0.6rem 0.75rem',
+                border: '1px solid #d5d3ce', borderRadius: '6px',
+                fontSize: '0.95rem', boxSizing: 'border-box',
+              }}
+            />
+            {deleteError && (
+              <div style={{
+                marginTop: '0.5rem', padding: '0.5rem 0.75rem',
+                background: '#fee', color: '#a11616',
+                borderRadius: '4px', fontSize: '0.85rem',
+              }}>{deleteError}</div>
+            )}
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteLoading}
+                style={{
+                  padding: '0.55rem 1rem', background: 'transparent',
+                  border: '1px solid #d5d3ce', borderRadius: '6px',
+                  color: '#4a4a45', cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9rem',
+                }}
+              >Cancel</button>
+              <button
+                onClick={deleteAccount}
+                disabled={deleteLoading || deleteConfirmEmail.toLowerCase() !== userEmail.toLowerCase()}
+                style={{
+                  padding: '0.55rem 1rem', background: '#a11616',
+                  border: '1px solid #a11616', borderRadius: '6px',
+                  color: 'white', cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9rem',
+                  opacity: (deleteLoading || deleteConfirmEmail.toLowerCase() !== userEmail.toLowerCase()) ? 0.5 : 1,
+                }}
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
