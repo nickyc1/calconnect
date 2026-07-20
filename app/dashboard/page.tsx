@@ -198,6 +198,26 @@ export default function DashboardPage() {
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem 1rem' }}>
+      <style>{`
+        .cc-tooltip { position: relative; display: inline-flex; align-items: center; }
+        .cc-tooltip-trigger {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 14px; height: 14px; border-radius: 50%;
+          background: #e0e0e0; color: #666; font-size: 10px; font-weight: 600;
+          cursor: help;
+        }
+        .cc-tooltip-bubble {
+          position: absolute; bottom: calc(100% + 6px); left: 50%;
+          transform: translateX(-50%);
+          background: #14140f; color: #f7f5ee;
+          padding: 6px 10px; border-radius: 6px;
+          font-size: 12px; line-height: 1.4; white-space: nowrap;
+          opacity: 0; pointer-events: none;
+          transition: opacity 80ms ease;
+          font-weight: 400;
+        }
+        .cc-tooltip:hover .cc-tooltip-bubble { opacity: 1; }
+      `}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h2 style={{ margin: 0 }}>CalConnect</h2>
         <button
@@ -270,13 +290,11 @@ export default function DashboardPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <label
-                    title={'A source calendar is where your real events live. Events on a source get mirrored as private "Busy" blocks on your other connected calendars. If you mark multiple calendars as sources, mirroring runs both ways — every source blocks time on every other calendar.'}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       cursor: actionLoading ? 'not-allowed' : 'pointer',
                       opacity: actionLoading ? 0.5 : 1,
-                      position: 'relative'
                     }}
                   >
                     <input
@@ -288,21 +306,10 @@ export default function DashboardPage() {
                     />
                     <span style={{ fontSize: '0.9rem', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                       Source
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '14px',
-                          height: '14px',
-                          borderRadius: '50%',
-                          background: '#e0e0e0',
-                          color: '#666',
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          cursor: 'help'
-                        }}
-                      >?</span>
+                      <span className="cc-tooltip">
+                        <span className="cc-tooltip-trigger">?</span>
+                        <span className="cc-tooltip-bubble">Events here show as &quot;Busy&quot; on your other calendars.</span>
+                      </span>
                     </span>
                   </label>
                   <button
