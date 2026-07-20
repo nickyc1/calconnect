@@ -2,13 +2,23 @@
 
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 
 // Whitelist of paths we're willing to redirect to after login. Never redirect
 // to a user-supplied external URL — that's an open-redirect vector.
 const ALLOWED_NEXT = new Set(['/dashboard', '/redeem'])
 
+// Next.js 14 requires useSearchParams() to sit inside a Suspense boundary
+// during static prerender. Wrap the real page content in one.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
