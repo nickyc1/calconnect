@@ -138,7 +138,20 @@ export default function DashboardPage() {
   }
 
   const connectAccount = () => {
-    // Redirect to Google OAuth consent screen
+    // Client-side gate: if the user is already at their plan's calendar limit,
+    // open the upgrade modal instead of sending them into an OAuth flow that
+    // the server would just reject at the callback. Server enforcement still
+    // runs on /api/auth/google/callback as the authoritative check — this
+    // is purely a UX improvement so users don't waste a Google grant.
+    if (billing) {
+      const limit = billing.plan === 'free'
+        ? Math.max(1, billing.entitled_calendars)
+        : billing.entitled_calendars
+      if (accounts.length >= limit) {
+        setShowUpgrade(true)
+        return
+      }
+    }
     window.location.href = '/api/auth/google/connect'
   }
 
