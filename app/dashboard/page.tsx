@@ -269,12 +269,16 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: actionLoading ? 'not-allowed' : 'pointer',
-                    opacity: actionLoading ? 0.5 : 1
-                  }}>
+                  <label
+                    title={'A source calendar is where your real events live. Events on a source get mirrored as private "Busy" blocks on your other connected calendars. If you mark multiple calendars as sources, mirroring runs both ways — every source blocks time on every other calendar.'}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: actionLoading ? 'not-allowed' : 'pointer',
+                      opacity: actionLoading ? 0.5 : 1,
+                      position: 'relative'
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={account.is_source_account}
@@ -282,7 +286,24 @@ export default function DashboardPage() {
                       disabled={actionLoading}
                       style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: actionLoading ? 'not-allowed' : 'pointer' }}
                     />
-                    <span style={{ fontSize: '0.9rem', color: '#666' }}>Source</span>
+                    <span style={{ fontSize: '0.9rem', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                      Source
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '50%',
+                          background: '#e0e0e0',
+                          color: '#666',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          cursor: 'help'
+                        }}
+                      >?</span>
+                    </span>
                   </label>
                   <button
                     onClick={() => removeAccount(account.account_id, account.google_email || account.account_display_name || account.account_id)}

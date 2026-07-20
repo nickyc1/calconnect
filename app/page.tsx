@@ -401,21 +401,20 @@ export default async function Home() {
           <div className="cc-v5-container">
             <div className="cc-v5-price-head">
               <div className="cc-v5-price-head-eyebrow">Simple pricing</div>
-              <h2>Start with a <em>lifetime deal.</em> Grow monthly.</h2>
-              <p>One base plan, three ways in. Add another calendar any time for $4/month.</p>
+              <h2>Connect <em>every</em> calendar you own.</h2>
+              <p>Two, ten, or every one you own. Add calendars any time for $4/month.</p>
             </div>
 
             <div className="cc-v5-price-grid">
-              {/* Card 1 — LTD via AppSumo (featured) */}
-              <div className="cc-v5-plan-card cc-v5-plan-featured">
-                <div className="cc-v5-plan-badge">Best deal</div>
+              {/* Card 1 — LTD via AppSumo */}
+              <div className="cc-v5-plan-card">
                 <div className="cc-v5-plan-name">Lifetime</div>
-                <div className="cc-v5-plan-sub">Own it forever · 2 calendars</div>
+                <div className="cc-v5-plan-sub">One-time · 2 calendars</div>
                 <div className="cc-v5-plan-price">
                   <span className="cc-v5-plan-num">$9</span>
                   <span className="cc-v5-plan-per">one-time</span>
                 </div>
-                <div className="cc-v5-plan-payterm">Pays for itself in 2 months</div>
+                <div className="cc-v5-plan-payterm">AppSumo launch offer</div>
                 <ul className="cc-v5-plan-list">
                   <li>2 connected Google Calendars</li>
                   <li>Real-time push notification sync</li>
@@ -427,8 +426,9 @@ export default async function Home() {
                 <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-plan-cta cc-v5-plan-cta-appsumo">Buy on AppSumo</a>
               </div>
 
-              {/* Card 2 — Basic monthly */}
-              <div className="cc-v5-plan-card">
+              {/* Card 2 — Basic monthly (featured) */}
+              <div className="cc-v5-plan-card cc-v5-plan-featured">
+                <div className="cc-v5-plan-badge">Most popular</div>
                 <div className="cc-v5-plan-name">Basic</div>
                 <div className="cc-v5-plan-sub">Monthly · 3 calendars</div>
                 <div className="cc-v5-plan-price">
@@ -444,7 +444,7 @@ export default async function Home() {
                   <li>Cancel any time</li>
                   <li>Add calendars any time · $4/mo each</li>
                 </ul>
-                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-plan-cta cc-v5-plan-cta-outline">Start Basic</a>
+                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-plan-cta cc-v5-plan-cta-dark">Start Basic</a>
               </div>
 
               {/* Card 3 — Pro monthly */}
@@ -461,10 +461,11 @@ export default async function Home() {
                   <li>Real-time push notification sync</li>
                   <li>Recurring &amp; bidirectional mirroring</li>
                   <li>Privacy-preserving &quot;Busy&quot; blocks</li>
+                  <li>Weekly AI event summaries</li>
                   <li>Priority email support</li>
                   <li>Add calendars any time · $4/mo each</li>
                 </ul>
-                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-plan-cta cc-v5-plan-cta-dark">Start Pro</a>
+                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-plan-cta cc-v5-plan-cta-outline">Start Pro</a>
               </div>
             </div>
 
