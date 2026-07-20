@@ -190,7 +190,7 @@ const CSS = `
 
 export default async function Home() {
   const user = await getUser()
-  if (user) redirect('/dashboard')
+  const isSignedIn = !!user
 
   return (
     <>
@@ -198,14 +198,18 @@ export default async function Home() {
       <div className="cc-v5">
         <nav className="cc-v5-nav">
           <div className="cc-v5-nav-inner">
-            <div className="cc-v5-brand">Cal<em>Connect</em></div>
+            <a href="/" className="cc-v5-brand">Cal<em>Connect</em></a>
             <div className="cc-v5-nav-menu">
               <a href="#how">How</a>
               <a href="#privacy">Privacy</a>
               <a href="#pricing">Pricing</a>
               <a href="#faq">FAQ</a>
             </div>
-            <a href="/login" className="cc-v5-btn cc-v5-btn-solid">Sign in</a>
+            {isSignedIn ? (
+              <a href="/dashboard" className="cc-v5-btn cc-v5-btn-solid">Dashboard</a>
+            ) : (
+              <a href="/login" className="cc-v5-btn cc-v5-btn-solid">Sign in</a>
+            )}
           </div>
         </nav>
 
@@ -216,7 +220,7 @@ export default async function Home() {
               <h1>Google Calendars, <em>synchronized.</em></h1>
               <p className="cc-v5-lede">One place blocks time on the others. Real-time. Privacy-preserving. Zero manual work after 90 seconds of setup.</p>
               <div className="cc-v5-h-cta">
-                <a href="/login" className="cc-v5-btn cc-v5-btn-accent">Sign in with Google</a>
+                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-btn cc-v5-btn-accent">{isSignedIn ? 'Go to dashboard' : 'Sign in with Google'}</a>
                 <a href="#how" className="cc-v5-btn">See how it works</a>
               </div>
               <div className="cc-v5-h-note">$9 lifetime on AppSumo · Extra calendars $4/mo</div>
