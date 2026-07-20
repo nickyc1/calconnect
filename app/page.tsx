@@ -152,6 +152,19 @@ const CSS = `
 .cc-v5-plan-list { list-style: none; padding: 0; margin-bottom: 24px; }
 .cc-v5-plan-list li { padding: 6px 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
 .cc-v5-plan-list li::before { content: ''; display: inline-block; width: 5px; height: 9px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); transform: rotate(45deg); margin-top: -3px; }
+.cc-v5-plan-addon { margin-top: 20px; padding-top: 20px; border-top: 0.5px dashed var(--border-strong); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.cc-v5-plan-addon-label { font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.cc-v5-plan-addon-label strong { color: var(--text); font-weight: 500; }
+.cc-v5-plan-addon-price { font-family: var(--serif); font-size: 24px; color: var(--deep); white-space: nowrap; }
+.cc-v5-plan-addon-price em { font-family: var(--sans); font-size: 13px; color: var(--text-3); font-style: normal; margin-left: 4px; }
+.cc-v5-plan-appsumo { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); background: var(--tint); padding: 4px 10px; border-radius: 999px; font-weight: 500; margin-bottom: 12px; }
+.cc-v5-plan-appsumo::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #ffb800; }
+.cc-v5-example { margin-top: 32px; padding: 20px 24px; background: var(--tint); border-radius: 12px; }
+.cc-v5-example-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 500; margin-bottom: 12px; }
+.cc-v5-example-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: var(--text-2); }
+.cc-v5-example-row strong { color: var(--text); font-weight: 500; }
+.cc-v5-example-total { border-top: 0.5px solid var(--border-strong); margin-top: 6px; padding-top: 8px; font-size: 15px; }
+.cc-v5-example-total strong { color: var(--deep); }
 
 /* FAQ */
 .cc-v5-qs { max-width: 720px; }
@@ -206,7 +219,7 @@ export default async function Home() {
                 <a href="/login" className="cc-v5-btn cc-v5-btn-accent">Sign in with Google</a>
                 <a href="#how" className="cc-v5-btn">See how it works</a>
               </div>
-              <div className="cc-v5-h-note">Free during beta · Grandfathered rate at launch</div>
+              <div className="cc-v5-h-note">$9 lifetime on AppSumo · Extra calendars $4/mo</div>
             </div>
 
             <div className="cc-v5-cal-stage">
@@ -383,26 +396,41 @@ export default async function Home() {
           <div className="cc-v5-container">
             <div className="cc-v5-price-wrap">
               <div className="cc-v5-price-copy">
-                <h2>Free while we&apos;re in <em>beta.</em></h2>
-                <p>Sign up now, keep your rate when we launch. No credit card during beta.</p>
-                <p>When v1 ships (after Google finishes OAuth verification), the plan becomes $6/mo for individuals. Beta users get grandfathered to that rate forever.</p>
-              </div>
-              <div className="cc-v5-plan-card">
-                <div className="cc-v5-plan-eyebrow">Individual · Beta pricing</div>
-                <div className="cc-v5-plan-price">
-                  <span className="cc-v5-plan-was">$8</span>
-                  <span className="cc-v5-plan-num">$0</span>
-                  <span className="cc-v5-plan-per">/mo</span>
+                <h2>Pay <em>once.</em> Add calendars as you grow.</h2>
+                <p>$9 gets you two calendars mirroring forever. No subscription, no renewals, no rate hikes.</p>
+                <p>Need a third, fourth, or fifth? Add another calendar for $4/month, any time. Cancel per-calendar whenever you want.</p>
+                <p style={{ color: 'var(--text-3)', fontSize: 14, marginTop: 20 }}>Lifetime deal available exclusively on AppSumo during launch.</p>
+
+                <div className="cc-v5-example">
+                  <div className="cc-v5-example-head">Example · 3 calendars</div>
+                  <div className="cc-v5-example-row"><span>Lifetime base (2 calendars)</span><strong>$9 once</strong></div>
+                  <div className="cc-v5-example-row"><span>+ 1 extra calendar</span><strong>$4 / mo</strong></div>
+                  <div className="cc-v5-example-row cc-v5-example-total"><span>Year 1 total</span><strong>$57</strong></div>
                 </div>
-                <p className="cc-v5-plan-note">Full product, no ads, no upsells. Cancel anytime once billing begins.</p>
+              </div>
+
+              <div className="cc-v5-plan-card">
+                <div className="cc-v5-plan-appsumo">AppSumo exclusive · Limited time</div>
+                <div className="cc-v5-plan-eyebrow">Lifetime · 2 calendars</div>
+                <div className="cc-v5-plan-price">
+                  <span className="cc-v5-plan-num">$9</span>
+                  <span className="cc-v5-plan-per">one-time</span>
+                </div>
+                <p className="cc-v5-plan-note">Own it forever. No subscription. Codes stack for more calendars.</p>
                 <ul className="cc-v5-plan-list">
-                  <li>Up to 5 connected Google Calendars</li>
+                  <li>2 connected Google Calendars</li>
                   <li>Real-time push notification sync</li>
                   <li>Recurring event support</li>
                   <li>Bidirectional mirroring</li>
                   <li>Privacy-preserving &quot;Busy&quot; blocks</li>
+                  <li>All future updates included</li>
                 </ul>
-                <a href="/login" className="cc-v5-btn cc-v5-btn-accent" style={{ display: 'block', textAlign: 'center', padding: '12px 20px', fontSize: 15, width: '100%' }}>Start free</a>
+                <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-btn cc-v5-btn-accent" style={{ display: 'block', textAlign: 'center', padding: '12px 20px', fontSize: 15, width: '100%' }}>Get it on AppSumo →</a>
+
+                <div className="cc-v5-plan-addon">
+                  <div className="cc-v5-plan-addon-label"><strong>Need more calendars?</strong><br/>Add one any time, monthly.</div>
+                  <div className="cc-v5-plan-addon-price">+$4<em>/mo each</em></div>
+                </div>
               </div>
             </div>
           </div>
@@ -439,8 +467,8 @@ export default async function Home() {
         <div className="cc-v5-container">
           <div className="cc-v5-closer">
             <h2>Stop double-booking <em>yourself.</em></h2>
-            <p>Ninety seconds to connect. Free during beta.</p>
-            <a href="/login" className="cc-v5-btn cc-v5-btn-accent" style={{ padding: '12px 24px', fontSize: 15 }}>Sign in with Google</a>
+            <p>Two calendars synchronized forever, for $9. Available now on AppSumo.</p>
+            <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-btn cc-v5-btn-accent" style={{ padding: '12px 24px', fontSize: 15 }}>Get it on AppSumo →</a>
           </div>
         </div>
 
