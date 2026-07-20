@@ -64,6 +64,27 @@ export default function LoginPage() {
           </div>
         )}
 
+        <div style={{
+          background: '#fff8e1',
+          border: '1px solid #f0d174',
+          borderRadius: '8px',
+          padding: '0.9rem 1rem',
+          marginBottom: '1.25rem',
+          textAlign: 'left',
+          fontSize: '0.85rem',
+          lineHeight: 1.5,
+          color: '#5c4a10'
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+            Heads up: Google will show a warning
+          </div>
+          <div>
+            We&apos;re finalizing Google&apos;s verification (4-6 weeks). Until then, you&apos;ll see &quot;Google hasn&apos;t verified this app&quot;.
+            Click <strong>Advanced</strong> → <strong>Go to CalConnect (unsafe)</strong> to continue. Your data stays private — see our{' '}
+            <a href="/privacy" style={{ color: '#5c4a10', textDecoration: 'underline' }}>Privacy Policy</a>.
+          </div>
+        </div>
+
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
