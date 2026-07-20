@@ -138,33 +138,34 @@ const CSS = `
 .cc-v5-p-list-dark .cc-v5-neg li { color: rgba(247,245,238,0.4); text-decoration: line-through; }
 
 /* PRICING */
-.cc-v5-price-wrap { display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; }
-@media (min-width: 720px) { .cc-v5-price-wrap { grid-template-columns: 1fr 1fr; gap: 56px; } }
-.cc-v5-price-copy h2 { margin-bottom: 16px; }
-.cc-v5-price-copy p { color: var(--text-2); font-size: 17px; line-height: 1.55; margin-bottom: 12px; }
-.cc-v5-plan-card { background: var(--panel); border: 1px solid var(--deep); border-radius: 16px; padding: 32px; }
-.cc-v5-plan-eyebrow { font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; font-weight: 500; }
-.cc-v5-plan-price { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-.cc-v5-plan-was { font-family: var(--serif); color: var(--text-3); text-decoration: line-through; font-size: 24px; }
-.cc-v5-plan-num { font-family: var(--serif); font-size: 60px; font-weight: 400; letter-spacing: -0.02em; line-height: 1; }
-.cc-v5-plan-per { color: var(--text-2); font-size: 15px; }
-.cc-v5-plan-note { font-size: 14px; color: var(--text-2); margin-bottom: 20px; }
-.cc-v5-plan-list { list-style: none; padding: 0; margin-bottom: 24px; }
-.cc-v5-plan-list li { padding: 6px 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-.cc-v5-plan-list li::before { content: ''; display: inline-block; width: 5px; height: 9px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); transform: rotate(45deg); margin-top: -3px; }
-.cc-v5-plan-addon { margin-top: 20px; padding-top: 20px; border-top: 0.5px dashed var(--border-strong); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.cc-v5-plan-addon-label { font-size: 13px; color: var(--text-2); line-height: 1.4; }
-.cc-v5-plan-addon-label strong { color: var(--text); font-weight: 500; }
-.cc-v5-plan-addon-price { font-family: var(--serif); font-size: 24px; color: var(--deep); white-space: nowrap; }
-.cc-v5-plan-addon-price em { font-family: var(--sans); font-size: 13px; color: var(--text-3); font-style: normal; margin-left: 4px; }
-.cc-v5-plan-appsumo { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); background: var(--tint); padding: 4px 10px; border-radius: 999px; font-weight: 500; margin-bottom: 12px; }
-.cc-v5-plan-appsumo::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #ffb800; }
-.cc-v5-example { margin-top: 32px; padding: 20px 24px; background: var(--tint); border-radius: 12px; }
-.cc-v5-example-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 500; margin-bottom: 12px; }
-.cc-v5-example-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: var(--text-2); }
-.cc-v5-example-row strong { color: var(--text); font-weight: 500; }
-.cc-v5-example-total { border-top: 0.5px solid var(--border-strong); margin-top: 6px; padding-top: 8px; font-size: 15px; }
-.cc-v5-example-total strong { color: var(--deep); }
+.cc-v5-price-head { text-align: center; max-width: 720px; margin: 0 auto 56px; }
+.cc-v5-price-head-eyebrow { font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; margin-bottom: 12px; }
+.cc-v5-price-head h2 { margin: 0 auto 16px; max-width: none; }
+.cc-v5-price-head p { color: var(--text-2); font-size: 17px; line-height: 1.55; }
+.cc-v5-price-grid { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 1120px; margin: 0 auto; }
+@media (min-width: 900px) { .cc-v5-price-grid { grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: stretch; } }
+.cc-v5-plan-card { background: var(--panel); border: 0.5px solid var(--border-strong); border-radius: 20px; padding: 36px 32px; display: flex; flex-direction: column; position: relative; }
+.cc-v5-plan-card.cc-v5-plan-featured { border: 2px solid var(--deep); }
+.cc-v5-plan-badge { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: var(--deep); color: #f7f5ee; padding: 6px 14px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.cc-v5-plan-name { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--deep); margin-bottom: 6px; letter-spacing: -0.01em; }
+.cc-v5-plan-sub { font-size: 13px; color: var(--text-3); margin-bottom: 24px; }
+.cc-v5-plan-price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.cc-v5-plan-was { font-family: var(--serif); color: var(--text-3); text-decoration: line-through; font-size: 22px; }
+.cc-v5-plan-num { font-family: var(--serif); font-size: 60px; font-weight: 400; letter-spacing: -0.02em; line-height: 1; color: var(--deep); }
+.cc-v5-plan-per { color: var(--text-2); font-size: 14px; }
+.cc-v5-plan-payterm { font-size: 13px; color: var(--text-3); margin-bottom: 24px; }
+.cc-v5-plan-list { list-style: none; padding: 0; margin: 0 0 28px; flex: 1; }
+.cc-v5-plan-list li { padding: 6px 0; font-size: 14px; display: flex; align-items: flex-start; gap: 10px; color: var(--text-2); line-height: 1.45; }
+.cc-v5-plan-list li::before { content: ''; display: inline-block; width: 5px; height: 9px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); transform: rotate(45deg); margin-top: 6px; flex-shrink: 0; }
+.cc-v5-plan-cta { display: block; text-align: center; padding: 13px 20px; font-size: 15px; font-weight: 500; border-radius: 999px; text-decoration: none; transition: opacity 150ms; }
+.cc-v5-plan-cta:hover { opacity: 0.9; }
+.cc-v5-plan-cta-appsumo { background: #ffbc00; color: #14140f !important; }
+.cc-v5-plan-cta-appsumo::after { content: ' →'; }
+.cc-v5-plan-cta-dark { background: var(--deep); color: #f7f5ee !important; }
+.cc-v5-plan-cta-outline { background: transparent; color: var(--text) !important; border: 0.5px solid var(--border-strong); }
+.cc-v5-plan-cta-outline:hover { background: var(--tint); opacity: 1; }
+.cc-v5-price-foot { max-width: 720px; margin: 40px auto 0; text-align: center; padding: 20px 24px; background: var(--tint); border-radius: 12px; font-size: 14px; color: var(--text-2); }
+.cc-v5-price-foot strong { color: var(--text); font-weight: 500; }
 
 /* FAQ */
 .cc-v5-qs { max-width: 720px; }
@@ -398,44 +399,77 @@ export default async function Home() {
 
         <section id="pricing" className="cc-v5-section">
           <div className="cc-v5-container">
-            <div className="cc-v5-price-wrap">
-              <div className="cc-v5-price-copy">
-                <h2>Pay <em>once.</em> Add calendars as you grow.</h2>
-                <p>$9 gets you two calendars mirroring forever. No subscription, no renewals, no rate hikes.</p>
-                <p>Need a third, fourth, or fifth? Add another calendar for $4/month, any time. Cancel per-calendar whenever you want.</p>
-                <p style={{ color: 'var(--text-3)', fontSize: 14, marginTop: 20 }}>Lifetime deal available exclusively on AppSumo during launch.</p>
+            <div className="cc-v5-price-head">
+              <div className="cc-v5-price-head-eyebrow">Simple pricing</div>
+              <h2>Start with a <em>lifetime deal.</em> Grow monthly.</h2>
+              <p>One base plan, three ways in. Add another calendar any time for $4/month.</p>
+            </div>
 
-                <div className="cc-v5-example">
-                  <div className="cc-v5-example-head">Example · 3 calendars</div>
-                  <div className="cc-v5-example-row"><span>Lifetime base (2 calendars)</span><strong>$9 once</strong></div>
-                  <div className="cc-v5-example-row"><span>+ 1 extra calendar</span><strong>$4 / mo</strong></div>
-                  <div className="cc-v5-example-row cc-v5-example-total"><span>Year 1 total</span><strong>$57</strong></div>
-                </div>
-              </div>
-
-              <div className="cc-v5-plan-card">
-                <div className="cc-v5-plan-appsumo">AppSumo exclusive · Limited time</div>
-                <div className="cc-v5-plan-eyebrow">Lifetime · 2 calendars</div>
+            <div className="cc-v5-price-grid">
+              {/* Card 1 — LTD via AppSumo (featured) */}
+              <div className="cc-v5-plan-card cc-v5-plan-featured">
+                <div className="cc-v5-plan-badge">Best deal</div>
+                <div className="cc-v5-plan-name">Lifetime</div>
+                <div className="cc-v5-plan-sub">Own it forever · 2 calendars</div>
                 <div className="cc-v5-plan-price">
                   <span className="cc-v5-plan-num">$9</span>
                   <span className="cc-v5-plan-per">one-time</span>
                 </div>
-                <p className="cc-v5-plan-note">Own it forever. No subscription. Codes stack for more calendars.</p>
+                <div className="cc-v5-plan-payterm">Pays for itself in 2 months</div>
                 <ul className="cc-v5-plan-list">
                   <li>2 connected Google Calendars</li>
                   <li>Real-time push notification sync</li>
-                  <li>Recurring event support</li>
-                  <li>Bidirectional mirroring</li>
+                  <li>Recurring &amp; bidirectional mirroring</li>
                   <li>Privacy-preserving &quot;Busy&quot; blocks</li>
                   <li>All future updates included</li>
+                  <li>Add calendars any time · $4/mo each</li>
                 </ul>
-                <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-btn cc-v5-btn-accent" style={{ display: 'block', textAlign: 'center', padding: '12px 20px', fontSize: 15, width: '100%' }}>Get it on AppSumo →</a>
-
-                <div className="cc-v5-plan-addon">
-                  <div className="cc-v5-plan-addon-label"><strong>Need more calendars?</strong><br/>Add one any time, monthly.</div>
-                  <div className="cc-v5-plan-addon-price">+$4<em>/mo each</em></div>
-                </div>
+                <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-plan-cta cc-v5-plan-cta-appsumo">Buy on AppSumo</a>
               </div>
+
+              {/* Card 2 — Basic monthly */}
+              <div className="cc-v5-plan-card">
+                <div className="cc-v5-plan-name">Basic</div>
+                <div className="cc-v5-plan-sub">Monthly · 3 calendars</div>
+                <div className="cc-v5-plan-price">
+                  <span className="cc-v5-plan-num">$4</span>
+                  <span className="cc-v5-plan-per">/ month</span>
+                </div>
+                <div className="cc-v5-plan-payterm">Or $40/year — save 17%</div>
+                <ul className="cc-v5-plan-list">
+                  <li>3 connected Google Calendars</li>
+                  <li>Real-time push notification sync</li>
+                  <li>Recurring &amp; bidirectional mirroring</li>
+                  <li>Privacy-preserving &quot;Busy&quot; blocks</li>
+                  <li>Cancel any time</li>
+                  <li>Add calendars any time · $4/mo each</li>
+                </ul>
+                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-plan-cta cc-v5-plan-cta-outline">Start Basic</a>
+              </div>
+
+              {/* Card 3 — Pro monthly */}
+              <div className="cc-v5-plan-card">
+                <div className="cc-v5-plan-name">Pro</div>
+                <div className="cc-v5-plan-sub">Monthly · 10 calendars</div>
+                <div className="cc-v5-plan-price">
+                  <span className="cc-v5-plan-num">$10</span>
+                  <span className="cc-v5-plan-per">/ month</span>
+                </div>
+                <div className="cc-v5-plan-payterm">Or $100/year — save 17%</div>
+                <ul className="cc-v5-plan-list">
+                  <li>10 connected Google Calendars</li>
+                  <li>Real-time push notification sync</li>
+                  <li>Recurring &amp; bidirectional mirroring</li>
+                  <li>Privacy-preserving &quot;Busy&quot; blocks</li>
+                  <li>Priority email support</li>
+                  <li>Add calendars any time · $4/mo each</li>
+                </ul>
+                <a href={isSignedIn ? '/dashboard' : '/login'} className="cc-v5-plan-cta cc-v5-plan-cta-dark">Start Pro</a>
+              </div>
+            </div>
+
+            <div className="cc-v5-price-foot">
+              <strong>All plans include the same core product.</strong> Higher tiers just include more calendars up front. Need more than your plan? <strong>Add any calendar for $4/month, cancel per-calendar any time.</strong>
             </div>
           </div>
         </section>
