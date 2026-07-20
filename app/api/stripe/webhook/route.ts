@@ -3,8 +3,11 @@ import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase';
 import { stripe, priceIdToPlan, STRIPE_PRICES } from '@/lib/stripe';
 
-// App Router route handlers read raw body via req.text() — no bodyParser config needed.
-// (Pages-Router-style `export const config` is deprecated and breaks the build.)
+// Force Node.js runtime and dynamic rendering. Stripe signature verification
+// requires the EXACT raw bytes Stripe sent — any re-serialization breaks it.
+// Edge runtime or static/cached responses would corrupt the body.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/stripe/webhook
@@ -32,13 +35,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
   }
 
-  const rawBody = await req.text();
+  // Read as raw bytes (not string) so Next.js can't reformat the payload.
+  // Stripe signs the exact byte sequence; any JSON reserialization breaks it.
+  const rawBody = Buffer.from(await req.arrayBuffer());
 
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err: any) {
-    console.error('stripe webhook: signature verification failed', err.message);
+    console.error('stripe webhook: signature verification failed', err.message, {
+      bodyLen: rawBody.length,
+      sigPresent: !!sig,
+      secretPrefix: webhookSecret.slice(0, 8),
+    });
     return NextResponse.json({ error: `Signature verification failed: ${err.message}` }, { status: 400 });
   }
 
