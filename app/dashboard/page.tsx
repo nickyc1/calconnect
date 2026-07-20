@@ -33,7 +33,7 @@ export default function DashboardPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [userEmail, setUserEmail] = useState('')
-  const [billing, setBilling] = useState<{ plan: string; entitled_calendars: number; base_calendars: number; extra_calendars: number; subscription_status: string | null } | null>(null)
+  const [billing, setBilling] = useState<{ plan: string; entitled_calendars: number; base_calendars: number; extra_calendars: number; subscription_status: string | null; current_period_end: string | null } | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState('')
   const searchParams = useSearchParams()
@@ -420,6 +420,15 @@ export default function DashboardPage() {
                 padding: '3px 10px', borderRadius: '999px',
                 fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em',
               }}>{billing.plan}</span>
+              {billing.subscription_status === 'trialing' && billing.current_period_end && (
+                <span style={{
+                  background: '#fff4e5', color: '#7a4f0f',
+                  padding: '3px 10px', borderRadius: '999px',
+                  fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em',
+                }}>
+                  Trial · {Math.max(0, Math.ceil((new Date(billing.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d left
+                </span>
+              )}
               <button
                 onClick={() => setShowUpgrade(true)}
                 style={{
@@ -707,6 +716,9 @@ export default function DashboardPage() {
                 <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#14140f' }}>Basic</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$4/mo</div>
                 <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>3 calendars</div>
+                {billing?.plan === 'free' && (
+                  <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7 days free · cancel any time</div>
+                )}
               </button>
 
               <button
@@ -720,6 +732,9 @@ export default function DashboardPage() {
                 <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#14140f' }}>Pro</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$10/mo</div>
                 <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>10 calendars + AI summaries</div>
+                {billing?.plan === 'free' && (
+                  <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7 days free · cancel any time</div>
+                )}
               </button>
             </div>
 

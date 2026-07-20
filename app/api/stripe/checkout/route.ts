@@ -62,6 +62,14 @@ export async function POST(req: NextRequest) {
 
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://www.calconnect.io';
 
+    // 7-day free trial on Basic and Pro base plans. Extra-calendar add-ons
+    // don't get a trial — they're an incremental charge for existing subscribers.
+    // Stripe requires a card at checkout regardless (card captured, charged
+    // on day 7). If the customer has previously trialed with the same email +
+    // card, Stripe won't grant a second free trial automatically.
+    const isBasePlan = intent !== 'extra_calendar';
+    const trialDays = isBasePlan ? 7 : undefined;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -77,6 +85,7 @@ export async function POST(req: NextRequest) {
       metadata: { user_id: user.id, intent },
       subscription_data: {
         metadata: { user_id: user.id, intent },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
     });
 
