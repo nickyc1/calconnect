@@ -118,27 +118,29 @@ export default function RedeemPage() {
             Lifetime codes are for new accounts only. If you already have an active CalConnect subscription, cancel it first, then redeem here.
           </p>
 
-          <form onSubmit={handleRedeem}>
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="AS-CALC-XXXXX-XXXXX"
-              className="rd-input"
-              autoFocus
-              spellCheck={false}
-              autoComplete="off"
-              maxLength={200}
-              disabled={status === 'loading' || status === 'success'}
-            />
-            <button
-              type="submit"
-              className="rd-btn"
-              disabled={status === 'loading' || status === 'success' || !code.trim()}
-            >
-              {status === 'loading' ? 'Redeeming…' : 'Redeem'}
-            </button>
-          </form>
+          {status !== 'success' && (
+            <form onSubmit={handleRedeem}>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="AS-CALC-XXXXX-XXXXX"
+                className="rd-input"
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+                maxLength={200}
+                disabled={status === 'loading'}
+              />
+              <button
+                type="submit"
+                className="rd-btn"
+                disabled={status === 'loading' || !code.trim()}
+              >
+                {status === 'loading' ? 'Redeeming…' : 'Redeem'}
+              </button>
+            </form>
+          )}
 
           {message && (
             <div className={`rd-msg ${status === 'success' ? 'rd-msg-ok' : 'rd-msg-err'}`}>
