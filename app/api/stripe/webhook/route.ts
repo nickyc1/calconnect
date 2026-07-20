@@ -3,7 +3,8 @@ import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase';
 import { stripe, priceIdToPlan, STRIPE_PRICES } from '@/lib/stripe';
 
-export const config = { api: { bodyParser: false } };
+// App Router route handlers read raw body via req.text() — no bodyParser config needed.
+// (Pages-Router-style `export const config` is deprecated and breaks the build.)
 
 /**
  * POST /api/stripe/webhook
