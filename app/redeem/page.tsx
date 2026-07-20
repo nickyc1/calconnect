@@ -140,16 +140,15 @@ export default function RedeemPage() {
           {message && (
             <div className={`rd-msg ${status === 'success' ? 'rd-msg-ok' : 'rd-msg-err'}`}>
               {message}
-              {status === 'success' && (
-                <div style={{ marginTop: 12 }}>
-                  <Link href="/dashboard" className="rd-btn">Go to dashboard →</Link>
-                </div>
-              )}
             </div>
           )}
 
+          {status === 'success' && (
+            <Link href="/dashboard" className="rd-btn" style={{ marginTop: 16 }}>Go to dashboard →</Link>
+          )}
+
           <p className="rd-help">
-            Trouble redeeming? Email <a href="mailto:support@calconnect.io">support@calconnect.io</a> with your AppSumo receipt and the first 8 characters of your code.
+            Trouble redeeming? Email <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a> with your AppSumo receipt and the first 8 characters of your code.
           </p>
         </div>
       </div>
