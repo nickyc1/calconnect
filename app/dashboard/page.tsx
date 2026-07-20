@@ -33,6 +33,9 @@ export default function DashboardPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [userEmail, setUserEmail] = useState('')
+  const [billing, setBilling] = useState<{ plan: string; entitled_calendars: number; base_calendars: number; extra_calendars: number; subscription_status: string | null } | null>(null)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState('')
   const searchParams = useSearchParams()
 
   const supabase = createBrowserClient(
@@ -46,6 +49,8 @@ export default function DashboardPage() {
     // Check for URL params from OAuth callback
     const success = searchParams.get('success')
     const error = searchParams.get('error')
+    const upgrade = searchParams.get('upgrade')
+    const checkout = searchParams.get('checkout')
     if (success === 'account_connected') {
       setStatus('Account connected successfully!')
       setTimeout(() => setStatus(''), 3000)
@@ -54,6 +59,16 @@ export default function DashboardPage() {
       setTimeout(() => setStatus(''), 3000)
     } else if (error) {
       setStatus(`Error: ${error.replace(/_/g, ' ')}`)
+    }
+    if (upgrade === 'needed') {
+      setShowUpgrade(true)
+    }
+    if (checkout === 'success') {
+      setStatus('Payment complete — your plan is active!')
+      setTimeout(() => setStatus(''), 4000)
+    } else if (checkout === 'cancelled') {
+      setStatus('Checkout cancelled.')
+      setTimeout(() => setStatus(''), 3000)
     }
   }, [])
 
@@ -72,7 +87,33 @@ export default function DashboardPage() {
     const sourcesData = await sourcesRes.json()
     setSources(sourcesData.sources || [])
 
+    try {
+      const billingRes = await fetch('/api/billing')
+      if (billingRes.ok) setBilling(await billingRes.json())
+    } catch {}
+
     setLoading(false)
+  }
+
+  const startCheckout = async (intent: string) => {
+    setCheckoutLoading(intent)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent }),
+      })
+      const data = await res.json()
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        setStatus(`Checkout error: ${data?.error || 'unknown'}`)
+        setCheckoutLoading('')
+      }
+    } catch (err: any) {
+      setStatus(`Checkout error: ${err?.message || 'unknown'}`)
+      setCheckoutLoading('')
+    }
   }
 
   const connectAccount = () => {
@@ -330,7 +371,30 @@ export default function DashboardPage() {
         marginBottom: '1rem',
         border: '1px solid #e5e7eb'
       }}>
-        <h3 style={{ marginTop: 0 }}>Connected Accounts ({accounts.length}/5)</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
+          <h3 style={{ margin: 0 }}>
+            Connected Accounts ({accounts.length}
+            {billing ? `/${billing.entitled_calendars}` : ''})
+          </h3>
+          {billing && (
+            <div style={{ fontSize: '0.85rem', color: '#4a4a45', display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>
+              <span style={{
+                background: billing.plan === 'free' ? '#f0eee5' : '#e8f5e9',
+                color: billing.plan === 'free' ? '#4a4a45' : '#1e5f22',
+                padding: '3px 10px', borderRadius: '999px',
+                fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>{billing.plan}</span>
+              <button
+                onClick={() => setShowUpgrade(true)}
+                style={{
+                  background: 'transparent', border: 'none',
+                  color: '#de5b28', cursor: 'pointer', fontSize: '0.85rem', padding: 0,
+                  textDecoration: 'underline',
+                }}
+              >{billing.plan === 'free' ? 'Choose a plan' : 'Add calendars'}</button>
+            </div>
+          )}
+        </div>
 
         {accounts.length === 0 ? (
           <p style={{ color: '#666' }}>No accounts connected yet. Connect your Google Calendar accounts to get started.</p>
@@ -570,6 +634,86 @@ export default function DashboardPage() {
           Delete my account
         </button>
       </div>
+
+      {showUpgrade && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 50, padding: '1rem',
+          }}
+        >
+          <div style={{
+            background: 'white', borderRadius: '14px', padding: '2rem',
+            maxWidth: '560px', width: '100%',
+            boxShadow: '0 30px 80px rgba(0,0,0,0.3)',
+          }}>
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.35rem', color: '#14140f' }}>
+              Connect more calendars
+            </h3>
+            <p style={{ margin: '0 0 1.25rem', fontSize: '0.95rem', color: '#4a4a45', lineHeight: 1.5 }}>
+              You&apos;re at your plan&apos;s calendar limit ({billing?.entitled_calendars ?? 0} of {billing?.entitled_calendars ?? 0}). Pick a plan or add a single calendar for $4/month.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <button
+                onClick={() => startCheckout('basic_monthly')}
+                disabled={!!checkoutLoading}
+                style={{
+                  padding: '1rem', border: '1.5px solid #14140f', borderRadius: '10px',
+                  background: 'white', cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#14140f' }}>Basic</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$4/mo</div>
+                <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>3 calendars</div>
+              </button>
+
+              <button
+                onClick={() => startCheckout('pro_monthly')}
+                disabled={!!checkoutLoading}
+                style={{
+                  padding: '1rem', border: '1.5px solid #14140f', borderRadius: '10px',
+                  background: 'white', cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#14140f' }}>Pro</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$10/mo</div>
+                <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>10 calendars + AI summaries</div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => startCheckout('extra_calendar')}
+              disabled={!!checkoutLoading}
+              style={{
+                width: '100%', padding: '0.75rem 1rem',
+                border: '1px solid #e0dfd8', borderRadius: '8px',
+                background: '#f7f5ee', cursor: 'pointer',
+                fontSize: '0.9rem', color: '#14140f', marginBottom: '1rem',
+              }}
+            >
+              Just add one calendar — $4/mo
+            </button>
+
+            {checkoutLoading && (
+              <div style={{ fontSize: '0.85rem', color: '#4a4a45', textAlign: 'center', marginBottom: '0.5rem' }}>
+                Redirecting to Stripe checkout…
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowUpgrade(false)}
+              style={{
+                width: '100%', padding: '0.6rem', background: 'transparent',
+                border: 'none', color: '#8a887f', cursor: 'pointer', fontSize: '0.85rem',
+              }}
+            >Not now</button>
+          </div>
+        </div>
+      )}
 
       {showDeleteModal && (
         <div

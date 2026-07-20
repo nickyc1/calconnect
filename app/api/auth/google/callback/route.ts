@@ -75,6 +75,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Enforce plan calendar limits BEFORE inserting a new user_accounts row.
+    // Per rafter-secure-design: the DB is the gatekeeper, Stripe is the reconciler.
+    // We read entitlement + current count in a single flow; if a race lets a user
+    // sneak through (very rare given OAuth latency), the next enable-mirroring
+    // check will catch it.
+    const { data: billing } = await (supabaseAdmin as any)
+      .from('user_billing')
+      .select('base_calendars, extra_calendars, plan')
+      .eq('user_id', stateData.userId)
+      .maybeSingle();
+
+    const entitled = ((billing as any)?.base_calendars || 0) + ((billing as any)?.extra_calendars || 0);
+    // Free tier gets 1 connected calendar for exploration (can't enable mirroring with only 1 anyway).
+    const effectiveLimit = (billing as any)?.plan === 'free' || !billing ? Math.max(1, entitled) : entitled;
+
+    const { count: currentCount } = await (supabaseAdmin as any)
+      .from('user_accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', stateData.userId)
+      .eq('is_active', true);
+
+    if ((currentCount || 0) >= effectiveLimit) {
+      return NextResponse.redirect(
+        new URL('/dashboard?upgrade=needed&reason=calendar_limit', request.url)
+      );
+    }
+
     // Create new account record
     // Use email as the account_id (unique per user)
     const accountId = email;
