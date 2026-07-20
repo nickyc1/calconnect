@@ -1,17 +1,25 @@
 'use client'
 
 import { createBrowserClient } from '@supabase/ssr'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
+
+// Whitelist of paths we're willing to redirect to after login. Never redirect
+// to a user-supplied external URL — that's an open-redirect vector.
+const ALLOWED_NEXT = new Set(['/dashboard', '/redeem'])
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  const rawNext = searchParams.get('next') || ''
+  const next = ALLOWED_NEXT.has(rawNext) ? rawNext : '/dashboard'
 
   const handleGoogleLogin = async () => {
     setLoading(true)
@@ -20,7 +28,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
 
