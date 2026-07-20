@@ -145,7 +145,7 @@ export default function DashboardPage() {
     // is purely a UX improvement so users don't waste a Google grant.
     if (billing) {
       const limit = billing.plan === 'free'
-        ? Math.max(1, billing.entitled_calendars)
+        ? Math.max(2, billing.entitled_calendars)
         : billing.entitled_calendars
       if (accounts.length >= limit) {
         setShowUpgrade(true)
@@ -409,7 +409,7 @@ export default function DashboardPage() {
           <h3 style={{ margin: 0 }}>
             Connected Accounts ({accounts.length}
             {billing
-              ? `/${Math.max(billing.entitled_calendars, billing.plan === 'free' ? 1 : billing.entitled_calendars)}`
+              ? `/${Math.max(billing.entitled_calendars, billing.plan === 'free' ? 2 : billing.entitled_calendars)}`
               : ''})
           </h3>
           {billing && (

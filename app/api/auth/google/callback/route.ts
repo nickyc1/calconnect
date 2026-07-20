@@ -88,7 +88,9 @@ export async function GET(request: NextRequest) {
 
     const entitled = ((billing as any)?.base_calendars || 0) + ((billing as any)?.extra_calendars || 0);
     // Free tier gets 1 connected calendar for exploration (can't enable mirroring with only 1 anyway).
-    const effectiveLimit = (billing as any)?.plan === 'free' || !billing ? Math.max(1, entitled) : entitled;
+    // Free tier gets 2 calendars so users can experience the core mirroring
+    // behavior without paying. Any additional connection requires an upgrade.
+    const effectiveLimit = (billing as any)?.plan === 'free' || !billing ? Math.max(2, entitled) : entitled;
 
     const { count: currentCount } = await (supabaseAdmin as any)
       .from('user_accounts')
