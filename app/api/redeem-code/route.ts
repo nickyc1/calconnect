@@ -87,6 +87,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
     }
 
+    // Block redemption if the user already has an active paid subscription.
+    // Lifetime codes are new-account-only per business rule: an existing
+    // subscriber redeeming a code would end up double-paying (Stripe keeps
+    // charging while we grant lifetime). We refuse up front with a clear
+    // message rather than silently overwriting their entitlement.
+    const { data: currentBilling } = await (supabaseAdmin as any)
+      .from('user_billing')
+      .select('plan, subscription_status')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const activeSubStatuses = new Set(['active', 'trialing', 'past_due']);
+    if (
+      currentBilling &&
+      ((currentBilling as any).plan === 'basic' || (currentBilling as any).plan === 'pro') &&
+      activeSubStatuses.has((currentBilling as any).subscription_status)
+    ) {
+      await logEvent(user.id, null, codePrefix, 'error', ip, userAgent);
+      return NextResponse.json(
+        {
+          error:
+            'You already have an active CalConnect subscription. Lifetime codes are for new accounts only. Cancel your subscription first, then redeem again — or gift the code to someone else.',
+          reason: 'existing_subscription',
+        },
+        { status: 409 },
+      );
+    }
+
     const codeHash = createHash('sha256').update(rawCode).digest('hex');
 
     // Check what state the code is in without granting yet — needed to

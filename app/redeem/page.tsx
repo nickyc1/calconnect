@@ -114,6 +114,9 @@ export default function RedeemPage() {
           <div className="rd-brand">Cal<em>Connect</em></div>
           <h1 className="rd-title">Redeem your AppSumo code</h1>
           <p className="rd-sub">Paste the code AppSumo emailed you. This activates your CalConnect Lifetime plan (2 connected Google Calendars, forever).</p>
+          <p className="rd-help" style={{ marginTop: 0, marginBottom: 20 }}>
+            Lifetime codes are for new accounts only. If you already have an active CalConnect subscription, cancel it first, then redeem here.
+          </p>
 
           <form onSubmit={handleRedeem}>
             <input
