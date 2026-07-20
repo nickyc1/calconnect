@@ -102,19 +102,37 @@ class GoogleAuthService {
       : 0;
 
     if (Date.now() > expiry - 5 * 60 * 1000) {
-      const { credentials } = await client.refreshAccessToken();
-      client.setCredentials(credentials);
+      try {
+        const { credentials } = await client.refreshAccessToken();
+        client.setCredentials(credentials);
 
-      // Store refreshed tokens
-      await (supabaseAdmin as any)
-        .from('user_accounts')
-        .update({
-          access_token: credentials.access_token,
-          token_expiry: credentials.expiry_date
-            ? new Date(credentials.expiry_date).toISOString()
-            : null,
-        })
-        .eq('id', accountId);
+        // Store refreshed tokens
+        await (supabaseAdmin as any)
+          .from('user_accounts')
+          .update({
+            access_token: credentials.access_token,
+            token_expiry: credentials.expiry_date
+              ? new Date(credentials.expiry_date).toISOString()
+              : null,
+          })
+          .eq('id', accountId);
+      } catch (err: any) {
+        // Google returns invalid_grant when the refresh token has been revoked,
+        // expired (testing-mode 7-day cap), or otherwise invalidated. Mark the
+        // account so the dashboard can prompt reconnect, then rethrow so the
+        // caller can bail. Any other refresh error we rethrow unchanged.
+        const errStr = String(err?.response?.data?.error || err?.message || err);
+        if (errStr.includes('invalid_grant') || errStr.includes('Token has been expired') || errStr.includes('unauthorized_client')) {
+          await (supabaseAdmin as any)
+            .from('user_accounts')
+            .update({
+              needs_reauth: true,
+              reauth_flagged_at: new Date().toISOString(),
+            })
+            .eq('id', accountId);
+        }
+        throw err;
+      }
     }
 
     return client;

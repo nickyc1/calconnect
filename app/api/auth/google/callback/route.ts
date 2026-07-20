@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (existingAccount) {
-      // Update existing account tokens
+      // Update existing account tokens; clear reauth flag if it was set.
       await (supabaseAdmin as any)
         .from('user_accounts')
         .update({
@@ -65,6 +65,8 @@ export async function GET(request: NextRequest) {
           access_token: accessToken,
           token_expiry: new Date(expiryDate).toISOString(),
           is_active: true,
+          needs_reauth: false,
+          reauth_flagged_at: null,
         })
         .eq('id', (existingAccount as any).id);
 

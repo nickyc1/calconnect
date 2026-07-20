@@ -11,6 +11,7 @@ interface Account {
   google_email: string
   is_active: boolean
   is_source_account: boolean
+  needs_reauth?: boolean
 }
 
 interface Source {
@@ -252,6 +253,44 @@ export default function DashboardPage() {
         }
         .cc-tooltip:hover .cc-tooltip-bubble { opacity: 1; }
       `}</style>
+
+      {/* Reconnect banner — appears when any account's refresh token is dead */}
+      {accounts.some(a => a.needs_reauth) && (
+        <div style={{
+          background: '#fff4e5',
+          border: '1px solid #f0b072',
+          borderRadius: '8px',
+          padding: '0.9rem 1.1rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: '0.9rem', color: '#7a4f0f', lineHeight: 1.45 }}>
+            <strong>Reconnect needed.</strong>{' '}
+            {accounts.filter(a => a.needs_reauth).map(a => a.google_email || a.account_display_name).join(', ')}{' '}
+            lost access. Mirroring for {accounts.filter(a => a.needs_reauth).length > 1 ? 'these accounts' : 'this account'} is paused
+            until you reconnect.
+          </div>
+          <button
+            onClick={connectAccount}
+            style={{
+              padding: '0.5rem 1rem',
+              background: '#de5b28',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+            }}
+          >Reconnect Google</button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h2 style={{ margin: 0 }}>CalConnect</h2>
         <button
@@ -319,6 +358,19 @@ export default function DashboardPage() {
                       fontSize: '0.75rem'
                     }}>
                       SOURCE
+                    </span>
+                  )}
+                  {account.needs_reauth && (
+                    <span style={{
+                      marginLeft: '0.5rem',
+                      padding: '0.25rem 0.5rem',
+                      background: '#de5b28',
+                      color: 'white',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                    }}>
+                      RECONNECT
                     </span>
                   )}
                 </div>
