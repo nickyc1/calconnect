@@ -64,13 +64,34 @@ export default function DashboardPage() {
       setShowUpgrade(true)
     }
     if (checkout === 'success') {
-      setStatus('Payment complete — your plan is active!')
-      setTimeout(() => setStatus(''), 4000)
+      // Stripe redirects back the moment the user hits Subscribe, but the
+      // webhook that updates user_billing fires async (usually 1-5s later).
+      // Poll billing until the plan flips off 'free' or we time out.
+      setStatus('Payment complete — activating your plan...')
+      pollBillingUntilActive(20).then(() => setTimeout(() => setStatus(''), 3000))
     } else if (checkout === 'cancelled') {
       setStatus('Checkout cancelled.')
       setTimeout(() => setStatus(''), 3000)
     }
   }, [])
+
+  const pollBillingUntilActive = async (maxAttempts: number) => {
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const res = await fetch('/api/billing', { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          setBilling(data)
+          if (data?.plan && data.plan !== 'free') {
+            setStatus('Plan active. Welcome aboard.')
+            return
+          }
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 1500))
+    }
+    setStatus('Payment received. Refresh in a moment if your plan still shows free.')
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -374,7 +395,9 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
           <h3 style={{ margin: 0 }}>
             Connected Accounts ({accounts.length}
-            {billing ? `/${billing.entitled_calendars}` : ''})
+            {billing
+              ? `/${Math.max(billing.entitled_calendars, billing.plan === 'free' ? 1 : billing.entitled_calendars)}`
+              : ''})
           </h3>
           {billing && (
             <div style={{ fontSize: '0.85rem', color: '#4a4a45', display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>
@@ -651,10 +674,12 @@ export default function DashboardPage() {
             boxShadow: '0 30px 80px rgba(0,0,0,0.3)',
           }}>
             <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.35rem', color: '#14140f' }}>
-              Connect more calendars
+              {billing?.plan === 'free' ? 'Pick a plan to start mirroring' : 'Connect more calendars'}
             </h3>
             <p style={{ margin: '0 0 1.25rem', fontSize: '0.95rem', color: '#4a4a45', lineHeight: 1.5 }}>
-              You&apos;re at your plan&apos;s calendar limit ({billing?.entitled_calendars ?? 0} of {billing?.entitled_calendars ?? 0}). Pick a plan or add a single calendar for $4/month.
+              {billing?.plan === 'free'
+                ? 'CalConnect needs at least two Google Calendars to mirror between. Pick a plan below to unlock connecting and mirroring.'
+                : `You're at your plan's calendar limit. Upgrade your plan or add extra calendars at $4/month each.`}
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -685,18 +710,20 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <button
-              onClick={() => startCheckout('extra_calendar')}
-              disabled={!!checkoutLoading}
-              style={{
-                width: '100%', padding: '0.75rem 1rem',
-                border: '1px solid #e0dfd8', borderRadius: '8px',
-                background: '#f7f5ee', cursor: 'pointer',
-                fontSize: '0.9rem', color: '#14140f', marginBottom: '1rem',
-              }}
-            >
-              Just add one calendar — $4/mo
-            </button>
+            {billing && billing.plan !== 'free' && (
+              <button
+                onClick={() => startCheckout('extra_calendar')}
+                disabled={!!checkoutLoading}
+                style={{
+                  width: '100%', padding: '0.75rem 1rem',
+                  border: '1px solid #e0dfd8', borderRadius: '8px',
+                  background: '#f7f5ee', cursor: 'pointer',
+                  fontSize: '0.9rem', color: '#14140f', marginBottom: '1rem',
+                }}
+              >
+                Already on a plan? Add one more calendar for $4/mo →
+              </button>
+            )}
 
             {checkoutLoading && (
               <div style={{ fontSize: '0.85rem', color: '#4a4a45', textAlign: 'center', marginBottom: '0.5rem' }}>
