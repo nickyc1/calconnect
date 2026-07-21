@@ -5,9 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
 
-// Whitelist of paths we're willing to redirect to after login. Never redirect
-// to a user-supplied external URL — that's an open-redirect vector.
-const ALLOWED_NEXT = new Set(['/dashboard', '/redeem', '/onboarding'])
+// Allowed paths we'll redirect to after login. Prefix match (so /redeem?code=…
+// still works). Never allow protocol-relative // — that's an open-redirect vector.
+const ALLOWED_NEXT_PREFIXES = ['/dashboard', '/redeem', '/onboarding']
+function safeNext(raw: string): string {
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/dashboard'
+  return ALLOWED_NEXT_PREFIXES.some(p => raw === p || raw.startsWith(p + '?') || raw.startsWith(p + '#'))
+    ? raw
+    : '/dashboard'
+}
 
 // Next.js 14 requires useSearchParams() to sit inside a Suspense boundary
 // during static prerender. Wrap the real page content in one.
@@ -33,7 +39,7 @@ function LoginContent() {
   )
 
   const rawNext = searchParams.get('next') || ''
-  const next = ALLOWED_NEXT.has(rawNext) ? rawNext : '/dashboard'
+  const next = safeNext(rawNext)
 
   // Login page is login-only now. New-account creation happens on /signup.
   // The /redeem next-param stays supported for AppSumo buyers signing in

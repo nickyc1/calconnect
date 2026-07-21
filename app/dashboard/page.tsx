@@ -292,7 +292,10 @@ export default function DashboardPage() {
 
   const signOut = async () => {
     await supabase.auth.signOut()
-    window.location.href = '/login'
+    // Land on the home page rather than /login. The /login route can trip an
+    // edge-cache 405 the instant after auth state changes; the home page
+    // renders cleanly for signed-out users.
+    window.location.href = '/'
   }
 
   const sourceAccounts = accounts.filter(a => a.is_source_account)
