@@ -221,7 +221,7 @@ export default async function Home() {
               <h1>Google Calendars, <em>synchronized.</em></h1>
               <p className="cc-v5-lede">One place blocks time on the others. Real-time. Privacy-preserving. Zero manual work after 90 seconds of setup.</p>
               <div className="cc-v5-h-cta">
-                <a href={isSignedIn ? '/dashboard' : '/login?next=/dashboard'} className="cc-v5-btn cc-v5-btn-accent">{isSignedIn ? 'Go to dashboard' : 'Start 7-day free trial'}</a>
+                <a href={isSignedIn ? '/dashboard' : '/login?next=/onboarding'} className="cc-v5-btn cc-v5-btn-accent">{isSignedIn ? 'Go to dashboard' : 'Start 7-day free trial'}</a>
                 <a href="#how" className="cc-v5-btn">See how it works</a>
               </div>
               <div className="cc-v5-h-note">$9 lifetime on AppSumo · Extra calendars $4/mo</div>
@@ -444,7 +444,7 @@ export default async function Home() {
                   <li>Cancel any time</li>
                   <li>Add calendars any time · $4/mo each</li>
                 </ul>
-                <a href={isSignedIn ? '/dashboard' : '/login?next=/dashboard'} className="cc-v5-plan-cta cc-v5-plan-cta-dark">Start 7-day free trial</a>
+                <a href={isSignedIn ? '/dashboard' : '/login?next=/onboarding'} className="cc-v5-plan-cta cc-v5-plan-cta-dark">Start 7-day free trial</a>
               </div>
 
               {/* Card 3 — Pro monthly */}
@@ -465,7 +465,7 @@ export default async function Home() {
                   <li>Priority email support</li>
                   <li>Add calendars any time · $4/mo each</li>
                 </ul>
-                <a href={isSignedIn ? '/dashboard' : '/login?next=/dashboard'} className="cc-v5-plan-cta cc-v5-plan-cta-outline">Start 7-day free trial</a>
+                <a href={isSignedIn ? '/dashboard' : '/login?next=/onboarding'} className="cc-v5-plan-cta cc-v5-plan-cta-outline">Start 7-day free trial</a>
               </div>
             </div>
 

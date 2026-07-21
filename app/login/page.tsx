@@ -6,7 +6,7 @@ import { Suspense, useState } from 'react'
 
 // Whitelist of paths we're willing to redirect to after login. Never redirect
 // to a user-supplied external URL — that's an open-redirect vector.
-const ALLOWED_NEXT = new Set(['/dashboard', '/redeem'])
+const ALLOWED_NEXT = new Set(['/dashboard', '/redeem', '/onboarding'])
 
 // Next.js 14 requires useSearchParams() to sit inside a Suspense boundary
 // during static prerender. Wrap the real page content in one.
