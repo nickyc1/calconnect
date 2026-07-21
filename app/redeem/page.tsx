@@ -183,7 +183,7 @@ function RedeemContent() {
           {screen === 'enter_code' && (
             <>
               <h1 className="rd-title">Redeem your AppSumo code</h1>
-              <p className="rd-sub">Paste the code AppSumo emailed you.</p>
+              <p className="rd-sub">Paste the code from your AppSumo product page.</p>
               <form onSubmit={validateAndProceed}>
                 <input
                   type="text"
