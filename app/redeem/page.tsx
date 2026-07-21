@@ -53,12 +53,17 @@ function RedeemContent() {
       const isIn = !!user
       setSignedIn(isIn)
 
-      // Returning from Google OAuth: the code is carried in the URL.
+      // Look for the code in URL first (fastest path), then localStorage
+      // (survives if the OAuth roundtrip strips the query string).
       const urlCode = searchParams.get('code')
-      if (urlCode && isIn) {
-        setCode(urlCode.toUpperCase())
+      const storedCode = typeof window !== 'undefined' ? localStorage.getItem('cc_redeem_code') : null
+      const pendingCode = urlCode || storedCode
+
+      if (pendingCode && isIn) {
+        setCode(pendingCode.toUpperCase())
         setScreen('processing')
-        await claimCode(urlCode)
+        localStorage.removeItem('cc_redeem_code')
+        await claimCode(pendingCode)
       }
     })()
   }, [])
@@ -104,7 +109,9 @@ function RedeemContent() {
       })
       const data = await res.json()
       if (res.ok && data?.success) {
-        setScreen('success')
+        // Skip the success screen and drop the user directly into the dashboard
+        // with a fresh "connect your first calendar" state waiting for them.
+        router.replace('/dashboard?redeemed=1')
       } else {
         setError(data?.error || 'Could not redeem code. Please try again.')
         setScreen('enter_code')
@@ -121,7 +128,9 @@ function RedeemContent() {
     setLoading(true)
     setSignupMode('google')
     setError('')
-    // Pass the code back via URL so we can auto-claim after OAuth completes.
+    // Persist the code across the OAuth roundtrip in localStorage in case the
+    // URL query is stripped somewhere in the redirect chain.
+    localStorage.setItem('cc_redeem_code', code.trim())
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
