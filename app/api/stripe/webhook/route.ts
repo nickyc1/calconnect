@@ -146,7 +146,12 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
   const activeStatuses = new Set(['active', 'trialing', 'past_due']);
   const isActive = activeStatuses.has(status);
 
-  const periodEndSec = (sub as any).current_period_end;
+  // Stripe API 2024-06-20+ moved current_period_end from the top-level
+  // subscription onto each subscription item. Fall back to top-level for
+  // older API versions, then to the first item.
+  const periodEndSec =
+    (sub as any).current_period_end ||
+    (sub as any).items?.data?.[0]?.current_period_end;
   const periodEnd = periodEndSec ? new Date(periodEndSec * 1000).toISOString() : null;
 
   await (supabaseAdmin as any)
