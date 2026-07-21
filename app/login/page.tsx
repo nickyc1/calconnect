@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Suspense, useState } from 'react'
 
 // Whitelist of paths we're willing to redirect to after login. Never redirect
@@ -21,6 +22,9 @@ export default function LoginPage() {
 function LoginContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'google' | 'email'>('google')
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createBrowserClient(
@@ -31,20 +35,16 @@ function LoginContent() {
   const rawNext = searchParams.get('next') || ''
   const next = ALLOWED_NEXT.has(rawNext) ? rawNext : '/dashboard'
 
-  // Copy is context-aware. New-signup flows (onboarding, redeem) get
-  // account-creation wording; direct sign-in gets the classic login wording.
-  const isSignup = next === '/onboarding' || next === '/redeem'
-  const heading = isSignup ? 'Create your account' : 'Welcome back'
-  const subheading = next === '/onboarding'
-    ? 'Start your 7-day free trial. $0 due today, cancel any time.'
-    : next === '/redeem'
+  // Login page is login-only now. New-account creation happens on /signup.
+  // The /redeem next-param stays supported for AppSumo buyers signing in
+  // to an existing account to redeem their code.
+  const heading = 'Welcome back'
+  const subheading = next === '/redeem'
     ? 'Sign in with Google to redeem your AppSumo code.'
-    : 'Mirror your Google Calendars. Stay available everywhere.'
-  const buttonLabel = isSignup ? 'Continue with Google' : 'Sign in with Google'
-  const buttonLabelLoading = isSignup ? 'Creating account…' : 'Signing in…'
-  const consent = isSignup
-    ? 'By continuing, you agree to connect your Google Calendar accounts.'
-    : 'By signing in, you agree to connect your Google Calendar accounts.'
+    : 'Sign in to your CalConnect account.'
+  const buttonLabel = 'Sign in with Google'
+  const buttonLabelLoading = 'Signing in…'
+  const consent = 'By signing in, you agree to connect your Google Calendar accounts.'
 
   const handleGoogleLogin = async () => {
     setLoading(true)
@@ -61,6 +61,23 @@ function LoginContent() {
       setError(error.message)
       setLoading(false)
     }
+  }
+
+  const submitEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim() || password.length < 1) return
+    setLoading(true)
+    setError(null)
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+    if (signInError) {
+      setError(signInError.message)
+      setLoading(false)
+      return
+    }
+    router.push(next)
   }
 
   return (
@@ -117,7 +134,7 @@ function LoginContent() {
         </div>
 
         <button
-          onClick={handleGoogleLogin}
+          onClick={() => { setMode('google'); handleGoogleLogin() }}
           disabled={loading}
           style={{
             width: '100%',
@@ -131,10 +148,61 @@ function LoginContent() {
             opacity: loading ? 0.7 : 1
           }}
         >
-          {loading ? buttonLabelLoading : buttonLabel}
+          {loading && mode === 'google' ? buttonLabelLoading : buttonLabel}
         </button>
 
-        <p style={{ marginTop: '2rem', fontSize: '0.85rem', color: '#999' }}>{consent}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '1.25rem 0', color: '#999', fontSize: 12 }}>
+          <div style={{ flex: 1, height: 1, background: '#e5e5e5' }} />
+          <span>or</span>
+          <div style={{ flex: 1, height: 1, background: '#e5e5e5' }} />
+        </div>
+
+        <form onSubmit={submitEmailLogin} style={{ textAlign: 'left' }}>
+          <label style={{ display: 'block', fontSize: 13, color: '#555', marginBottom: 4 }}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setMode('email') }}
+            autoComplete="email"
+            placeholder="you@example.com"
+            disabled={loading}
+            style={{
+              width: '100%', padding: '0.6rem 0.75rem', boxSizing: 'border-box',
+              border: '1px solid #d5d3ce', borderRadius: 6, fontSize: 14, marginBottom: 12,
+            }}
+          />
+          <label style={{ display: 'block', fontSize: 13, color: '#555', marginBottom: 4 }}>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setMode('email') }}
+            autoComplete="current-password"
+            disabled={loading}
+            style={{
+              width: '100%', padding: '0.6rem 0.75rem', boxSizing: 'border-box',
+              border: '1px solid #d5d3ce', borderRadius: 6, fontSize: 14,
+            }}
+          />
+          <button
+            type="submit"
+            disabled={loading || !email.trim() || !password}
+            style={{
+              width: '100%', marginTop: 12, padding: '0.7rem 1rem',
+              background: '#14140f', color: '#f7f5ee', border: 'none', borderRadius: 6,
+              fontSize: 14, fontWeight: 500,
+              cursor: (loading || !email.trim() || !password) ? 'not-allowed' : 'pointer',
+              opacity: (loading || !email.trim() || !password) ? 0.55 : 1,
+            }}
+          >
+            {loading && mode === 'email' ? 'Signing in…' : 'Sign in with email'}
+          </button>
+        </form>
+
+        <p style={{ marginTop: '1.5rem', fontSize: '0.85rem', color: '#4a4a45' }}>
+          New here? <Link href="/signup" style={{ color: '#de5b28', textDecoration: 'underline' }}>Create an account</Link>
+        </p>
+
+        <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: '#999' }}>{consent}</p>
       </div>
     </div>
   )
