@@ -31,6 +31,21 @@ function LoginContent() {
   const rawNext = searchParams.get('next') || ''
   const next = ALLOWED_NEXT.has(rawNext) ? rawNext : '/dashboard'
 
+  // Copy is context-aware. New-signup flows (onboarding, redeem) get
+  // account-creation wording; direct sign-in gets the classic login wording.
+  const isSignup = next === '/onboarding' || next === '/redeem'
+  const heading = isSignup ? 'Create your account' : 'Welcome back'
+  const subheading = next === '/onboarding'
+    ? 'Start your 7-day free trial. $0 due today, cancel any time.'
+    : next === '/redeem'
+    ? 'Sign in with Google to redeem your AppSumo code.'
+    : 'Mirror your Google Calendars. Stay available everywhere.'
+  const buttonLabel = isSignup ? 'Continue with Google' : 'Sign in with Google'
+  const buttonLabelLoading = isSignup ? 'Creating account…' : 'Signing in…'
+  const consent = isSignup
+    ? 'By continuing, you agree to connect your Google Calendar accounts.'
+    : 'By signing in, you agree to connect your Google Calendar accounts.'
+
   const handleGoogleLogin = async () => {
     setLoading(true)
     setError(null)
@@ -65,10 +80,8 @@ function LoginContent() {
         maxWidth: '400px',
         textAlign: 'center'
       }}>
-        <h1 style={{ marginBottom: '0.5rem' }}>CalConnect</h1>
-        <p style={{ color: '#666', marginBottom: '2rem' }}>
-          Mirror your Google Calendars. Stay available everywhere.
-        </p>
+        <h1 style={{ marginBottom: '0.5rem' }}>{heading}</h1>
+        <p style={{ color: '#666', marginBottom: '2rem' }}>{subheading}</p>
 
         {error && (
           <div style={{
@@ -118,12 +131,10 @@ function LoginContent() {
             opacity: loading ? 0.7 : 1
           }}
         >
-          {loading ? 'Signing in...' : 'Sign in with Google'}
+          {loading ? buttonLabelLoading : buttonLabel}
         </button>
 
-        <p style={{ marginTop: '2rem', fontSize: '0.85rem', color: '#999' }}>
-          By signing in, you agree to connect your Google Calendar accounts.
-        </p>
+        <p style={{ marginTop: '2rem', fontSize: '0.85rem', color: '#999' }}>{consent}</p>
       </div>
     </div>
   )
