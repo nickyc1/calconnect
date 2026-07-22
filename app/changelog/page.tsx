@@ -99,6 +99,11 @@ const inFlight: Entry[] = [
     body: 'Recording the demo video, then submitting for Google\'s verification review. Approval takes 4-6 weeks. Once approved, the "unverified app" screen goes away.',
     tag: 'infra',
   },
+  {
+    title: 'Per-calendar color + label customization',
+    body: 'Right now every mirrored block is a gray "Busy". Coming: pick a color and a label ("Personal commitment", "CXL workshop", "focus time", whatever) for each source calendar. So your work calendar can distinguish your personal source from your side-project source at a glance, without ever leaking event details.',
+    tag: 'ux',
+  },
 ]
 
 const planned: Entry[] = [
@@ -120,6 +125,11 @@ const planned: Entry[] = [
   {
     title: 'Analytics',
     body: 'Plausible or GA4 so we can see which changes actually move signup and trial-to-paid.',
+    tag: 'infra',
+  },
+  {
+    title: 'Outlook + other calendar providers',
+    body: 'Support for Microsoft Outlook, then Apple/iCloud. Bigger lift than it sounds: each provider needs its own OAuth flow, its own push-notification protocol, and its own event-schema quirks. Requires refactoring the mirror engine into a provider-agnostic layer. Estimating 3-5 weeks of focused work for Outlook alone. Holding until Google verification is through and we have real user demand signal.',
     tag: 'infra',
   },
 ]
