@@ -159,7 +159,7 @@ private encodeUrl(url: string): string {
 - **SDK README**: `/node_modules/@pipedream/sdk/README.md`
 - **API Reference**: `/node_modules/@pipedream/sdk/reference.md`
 - **Package**: `@pipedream/sdk` v2.2.0
-- **Updated File**: `mircal_backend/lib/pipedream.ts`
+- **Updated File**: `calconnect_backend/lib/pipedream.ts`
 - **Documentation**: `CLAUDE.md` (Pipedream SDK v2.x section added)
 
 ## Impact

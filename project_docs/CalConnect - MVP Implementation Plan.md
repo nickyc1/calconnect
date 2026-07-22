@@ -1,4 +1,4 @@
-# MirCal - MVP Implementation Plan
+# CalConnect - MVP Implementation Plan
 
 **Last Updated:** December 9, 2025
 **Estimated Time:** 7 hours
@@ -12,7 +12,7 @@ Before starting, ensure you have:
 - [ ] Access to Supabase project dashboard
 - [ ] Access to Vercel deployment dashboard
 - [ ] ngrok installed for local webhook testing
-- [ ] Working PoC code in `mircal_backend/`
+- [ ] Working PoC code in `calconnect_backend/`
 
 ---
 
@@ -20,7 +20,7 @@ Before starting, ensure you have:
 
 ### Step 1.1: Create Migration File
 
-Create file: `mircal_backend/supabase/migrations/004_mvp_enhancements.sql`
+Create file: `calconnect_backend/supabase/migrations/004_mvp_enhancements.sql`
 
 ```sql
 -- Migration 004: MVP Enhancements
@@ -105,13 +105,13 @@ END $$;
 ### Step 2.3: Install Supabase Auth Dependencies
 
 ```bash
-cd mircal_backend
+cd calconnect_backend
 npm install @supabase/ssr
 ```
 
 ### Step 2.4: Create Auth Middleware
 
-Create file: `mircal_backend/middleware.ts`
+Create file: `calconnect_backend/middleware.ts`
 
 ```typescript
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
@@ -172,7 +172,7 @@ export const config = {
 
 ### Step 2.5: Create Auth Utility for Server Components
 
-Create file: `mircal_backend/lib/supabase-server.ts`
+Create file: `calconnect_backend/lib/supabase-server.ts`
 
 ```typescript
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
@@ -217,7 +217,7 @@ export async function getUser() {
 
 ### Step 2.6: Create Auth Callback Route
 
-Create file: `mircal_backend/app/auth/callback/route.ts`
+Create file: `calconnect_backend/app/auth/callback/route.ts`
 
 ```typescript
 import { createClient } from '@/lib/supabase-server'
@@ -247,7 +247,7 @@ export async function GET(request: Request) {
 
 ### Step 3.1: Create Login Page
 
-Create file: `mircal_backend/app/login/page.tsx`
+Create file: `calconnect_backend/app/login/page.tsx`
 
 ```typescript
 'use client'
@@ -296,7 +296,7 @@ export default function LoginPage() {
         maxWidth: '400px',
         textAlign: 'center'
       }}>
-        <h1 style={{ marginBottom: '0.5rem' }}>MirCal</h1>
+        <h1 style={{ marginBottom: '0.5rem' }}>CalConnect</h1>
         <p style={{ color: '#666', marginBottom: '2rem' }}>
           Calendar Mirroring Made Simple
         </p>
@@ -352,7 +352,7 @@ npm install @supabase/auth-helpers-nextjs
 
 ### Step 4.1: Create Dashboard Layout
 
-Create file: `mircal_backend/app/dashboard/layout.tsx`
+Create file: `calconnect_backend/app/dashboard/layout.tsx`
 
 ```typescript
 import { getUser } from '@/lib/supabase-server'
@@ -379,7 +379,7 @@ export default async function DashboardLayout({
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <h1 style={{ margin: 0, fontSize: '1.25rem' }}>MirCal</h1>
+        <h1 style={{ margin: 0, fontSize: '1.25rem' }}>CalConnect</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span style={{ color: '#666' }}>{user.email}</span>
           <form action="/auth/signout" method="post">
@@ -405,7 +405,7 @@ export default async function DashboardLayout({
 
 ### Step 4.2: Create Sign Out Route
 
-Create file: `mircal_backend/app/auth/signout/route.ts`
+Create file: `calconnect_backend/app/auth/signout/route.ts`
 
 ```typescript
 import { createClient } from '@/lib/supabase-server'
@@ -420,7 +420,7 @@ export async function POST() {
 
 ### Step 4.3: Create Dashboard Page
 
-Create file: `mircal_backend/app/dashboard/page.tsx`
+Create file: `calconnect_backend/app/dashboard/page.tsx`
 
 ```typescript
 'use client'
@@ -786,7 +786,7 @@ export default function DashboardPage() {
 
 ### Step 5.1: Create Accounts List Endpoint
 
-Create file: `mircal_backend/app/api/accounts/route.ts`
+Create file: `calconnect_backend/app/api/accounts/route.ts`
 
 ```typescript
 import { NextResponse } from 'next/server'
@@ -826,7 +826,7 @@ export async function GET() {
 
 ### Step 5.2: Create Sources List Endpoint
 
-Create file: `mircal_backend/app/api/sources/route.ts`
+Create file: `calconnect_backend/app/api/sources/route.ts`
 
 ```typescript
 import { NextResponse } from 'next/server'
@@ -863,7 +863,7 @@ export async function GET() {
 
 ### Step 5.3: Create Set Source Account Endpoint
 
-Create file: `mircal_backend/app/api/accounts/[id]/set-source/route.ts`
+Create file: `calconnect_backend/app/api/accounts/[id]/set-source/route.ts`
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -938,7 +938,7 @@ export async function POST(
 
 ### Step 5.4: Create Mirroring Activate Endpoint
 
-Create file: `mircal_backend/app/api/mirroring/activate/route.ts`
+Create file: `calconnect_backend/app/api/mirroring/activate/route.ts`
 
 ```typescript
 import { NextResponse } from 'next/server'
@@ -1062,7 +1062,7 @@ export async function POST() {
 
 ### Step 5.5: Create Mirroring Deactivate Endpoint
 
-Create file: `mircal_backend/app/api/mirroring/deactivate/route.ts`
+Create file: `calconnect_backend/app/api/mirroring/deactivate/route.ts`
 
 ```typescript
 import { NextResponse } from 'next/server'
@@ -1126,7 +1126,7 @@ export async function POST() {
 
 ### Step 5.6: Update Connect Token Endpoint
 
-Update `mircal_backend/app/api/connect/token/route.ts` to use authenticated user:
+Update `calconnect_backend/app/api/connect/token/route.ts` to use authenticated user:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1200,7 +1200,7 @@ export async function POST(request: NextRequest) {
 
 ### Step 6.1: Create Root Redirect
 
-Update `mircal_backend/app/page.tsx`:
+Update `calconnect_backend/app/page.tsx`:
 
 ```typescript
 import { redirect } from 'next/navigation'

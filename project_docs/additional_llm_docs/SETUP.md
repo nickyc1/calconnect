@@ -1,6 +1,6 @@
-# MirCal Backend Setup Guide
+# CalConnect Backend Setup Guide
 
-This guide walks you through setting up the MirCal backend service following the v3 Implementation Plan.
+This guide walks you through setting up the CalConnect backend service following the v3 Implementation Plan.
 
 ## Phase 0: Infrastructure Setup ✅ COMPLETED
 
@@ -57,7 +57,7 @@ You should see:
 ### Step 1: Create Pipedream Project
 
 1. Go to [Pipedream](https://pipedream.com/projects)
-2. Create a new project for MirCal
+2. Create a new project for CalConnect
 3. Note your Project ID
 
 ### Step 2: Create OAuth Client
@@ -108,7 +108,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ## Phase 3: Install Dependencies
 
 ```bash
-cd mircal-backend
+cd calconnect-backend
 npm install
 ```
 
@@ -195,6 +195,6 @@ Always use environment variables for:
 ## Support
 
 For issues or questions, refer to:
-- Implementation Plan: `mircal_resources/project_docs/MirCal - Implementation Plan v3 - Connect API Proxy Architecture.md`
+- Implementation Plan: `calconnect_resources/project_docs/CalConnect - Implementation Plan v3 - Connect API Proxy Architecture.md`
 - Pipedream Docs: https://pipedream.com/docs
 - Supabase Docs: https://supabase.com/docs

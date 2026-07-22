@@ -1,8 +1,8 @@
-# MirCal Backend
+# CalConnect Backend
 
 Multi-tenant calendar mirroring service using Pipedream Connect and Supabase.
 
-**Repository:** git@github.com:mh550/mircal-backend.git
+**Repository:** git@github.com:mh550/calconnect-backend.git
 
 ## Quick Start
 
@@ -46,7 +46,7 @@ Visit **http://localhost:3000** - redirects to login page or dashboard.
 ## Project Structure
 
 ```
-mircal_backend/
+calconnect_backend/
 ├── app/
 │   ├── api/
 │   │   ├── accounts/        # Account management endpoints

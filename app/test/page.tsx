@@ -52,7 +52,7 @@ export default function TestPage() {
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'monospace' }}>
-      <h1>MirCal POC Test Interface</h1>
+      <h1>CalConnect POC Test Interface</h1>
 
       <div style={{ marginTop: '2rem' }}>
         <h2>Step 1: Generate Connect Token</h2>

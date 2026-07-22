@@ -1,4 +1,4 @@
-# MirCal Backend - Project Summary
+# CalConnect Backend - Project Summary
 
 **Last Updated:** November 18, 2024
 **Status:** POC Development Phase
@@ -87,7 +87,7 @@ Multi-tenant calendar mirroring service that creates privacy-preserving "Busy" e
 ## Project Structure
 
 ```
-mircal_backend/
+calconnect_backend/
 ├── app/
 │   ├── api/
 │   │   ├── connect/
@@ -350,12 +350,12 @@ SELECT * FROM event_mappings;
 - [Supabase Docs](https://supabase.com/docs)
 
 ### Related Projects
-- `mircal_resources/` - Project planning & external docs
-- `mircal_workflows/` - Deprecated workflow approach
+- `calconnect_resources/` - Project planning & external docs
+- `calconnect_workflows/` - Deprecated workflow approach
 - `pipedream_source_code/` - Reference implementation
 
 ## Contact & Support
 
-**Project Repository:** git@github.com:mh550/mircal-backend.git
+**Project Repository:** git@github.com:mh550/calconnect-backend.git
 **Documentation:** See `docs/` folder
 **Issues:** Check `docs/FIXES.md` and `docs/MAINTENANCE.md`

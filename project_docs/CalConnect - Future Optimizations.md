@@ -1,6 +1,6 @@
-# MirCal - Future Optimizations for Production & Scale
+# CalConnect - Future Optimizations for Production & Scale
 
-This document outlines optimizations to implement as MirCal moves to production and scales. These improvements focus on reducing Pipedream credit usage, improving user experience, and enabling more granular control.
+This document outlines optimizations to implement as CalConnect moves to production and scales. These improvements focus on reducing Pipedream credit usage, improving user experience, and enabling more granular control.
 
 ---
 
@@ -268,8 +268,8 @@ Create **separate development instance** with full environment isolation.
 
 #### Infrastructure Setup
 **Vercel:**
-- `mircal-webapp-dev.vercel.app` (development)
-- `mircal-webapp.vercel.app` (production)
+- `calconnect-webapp-dev.vercel.app` (development)
+- `calconnect-webapp.vercel.app` (production)
 
 **Supabase:**
 - Development project with separate database
@@ -292,12 +292,12 @@ Create **separate development instance** with full environment isolation.
 # .env.development
 PIPEDREAM_ENVIRONMENT=development
 NEXT_PUBLIC_SUPABASE_URL=https://dev-project.supabase.co
-WEBHOOK_BASE_URL=https://mircal-webapp-dev.vercel.app
+WEBHOOK_BASE_URL=https://calconnect-webapp-dev.vercel.app
 
 # .env.production
 PIPEDREAM_ENVIRONMENT=production
 NEXT_PUBLIC_SUPABASE_URL=https://prod-project.supabase.co
-WEBHOOK_BASE_URL=https://mircal-webapp.vercel.app
+WEBHOOK_BASE_URL=https://calconnect-webapp.vercel.app
 ```
 
 ### Implementation Considerations

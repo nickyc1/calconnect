@@ -1,4 +1,4 @@
-# MirCal - MVP Specifications
+# CalConnect - MVP Specifications
 
 **Last Updated:** December 9, 2025
 **Status:** In Development

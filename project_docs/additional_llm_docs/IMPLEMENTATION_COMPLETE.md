@@ -1,4 +1,4 @@
-# MirCal Implementation Complete ✅
+# CalConnect Implementation Complete ✅
 
 **Date:** 2024-12-23
 **Status:** ALL CRITICAL & HIGH-PRIORITY BUGS FIXED
@@ -7,7 +7,7 @@
 
 ## Summary
 
-This session completed all remaining critical and high-priority bugs for the MirCal MVP:
+This session completed all remaining critical and high-priority bugs for the CalConnect MVP:
 
 ✅ **Bug #1 (P0 CRITICAL)** - Recurring Events Not Mirrored
 ✅ **Bug #2 (P1 HIGH)** - Missing Foreign Key Constraints
@@ -121,7 +121,7 @@ This session completed all remaining critical and high-priority bugs for the Mir
 - **How It Works:**
   - First webhook → No marker → Create instances + marker
   - Duplicate webhook → Marker found → Skip processing ✅
-- **See:** `mircal_resources/project_docs/MirCal - Bug Tracker.md` Bug #10
+- **See:** `calconnect_resources/project_docs/CalConnect - Bug Tracker.md` Bug #10
 
 **Ready for Re-Testing:**
 1. ⏳ Create new recurring event and verify only ONE set of mirrors
@@ -232,7 +232,7 @@ All related records automatically deleted, no orphans.
 - `package.json` (added rrule dependency)
 
 **Documentation:**
-- `mircal_resources/project_docs/MirCal - Bug Tracker.md`
+- `calconnect_resources/project_docs/CalConnect - Bug Tracker.md`
 - `~/.claude/llm-context/claude_history.md`
 
 ---

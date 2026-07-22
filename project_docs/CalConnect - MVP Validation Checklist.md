@@ -1,4 +1,4 @@
-# MirCal MVP - Validation Checklist
+# CalConnect MVP - Validation Checklist
 
 **Last Updated:** 2024-12-22
 **Status:** Validation Complete - Critical Bugs Found
@@ -12,7 +12,7 @@ This document tracks validation of key specifications and constraints for the MV
 - **OLD:** Single source account per user
 - **NEW:** Multiple source accounts per user
 - **Impact:** Affects database, UI, API endpoints, and mirroring logic
-- **See:** `MirCal - Specification Change - Multiple Sources.md` for full details
+- **See:** `CalConnect - Specification Change - Multiple Sources.md` for full details
 - **Status:** Must be implemented before production
 
 ## ⚠️ CRITICAL BUGS DISCOVERED (2024-12-22)
@@ -20,13 +20,13 @@ This document tracks validation of key specifications and constraints for the MV
 **Bug #1: Recurring Events Not Mirrored** (P0 - CRITICAL)
 - Only base recurring event mirrored, individual instances not created
 - Blocks production release
-- See `MirCal - Bug Tracker.md` for full details
+- See `CalConnect - Bug Tracker.md` for full details
 
 **Bug #3: Dashboard Refresh Loop** (P1 - HIGH)
 - Continuous API polling when connecting account
 - UX issue affecting all users
 
-**Full bug list:** See `MirCal - Bug Tracker.md` (8 bugs total)
+**Full bug list:** See `CalConnect - Bug Tracker.md` (8 bugs total)
 
 ---
 

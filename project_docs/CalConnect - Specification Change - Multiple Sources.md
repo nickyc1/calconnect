@@ -1,4 +1,4 @@
-# MirCal - Specification Change: Multiple Source Accounts
+# CalConnect - Specification Change: Multiple Source Accounts
 
 **Date:** 2024-12-22
 **Status:** CRITICAL SPEC CHANGE

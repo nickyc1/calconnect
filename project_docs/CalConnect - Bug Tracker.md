@@ -1,4 +1,4 @@
-# MirCal - Bug Tracker
+# CalConnect - Bug Tracker
 
 **Last Updated:** 2024-12-31
 **Status:** Active Development + Production Deployment
@@ -19,10 +19,10 @@ When deploying to Vercel, setting `WEBHOOK_BASE_URL` with a trailing slash preve
 **Configuration Error:**
 ```env
 # WRONG (breaks webhook delivery):
-WEBHOOK_BASE_URL=https://mircal-webapp.vercel.app/
+WEBHOOK_BASE_URL=https://calconnect-webapp.vercel.app/
 
 # CORRECT:
-WEBHOOK_BASE_URL=https://mircal-webapp.vercel.app
+WEBHOOK_BASE_URL=https://calconnect-webapp.vercel.app
 ```
 
 **What Happens:**
@@ -31,7 +31,7 @@ WEBHOOK_BASE_URL=https://mircal-webapp.vercel.app
 const webhookUri = `${process.env.WEBHOOK_BASE_URL}/api/connect/callback`;
 
 // With trailing slash:
-// "https://mircal-webapp.vercel.app//api/connect/callback"
+// "https://calconnect-webapp.vercel.app//api/connect/callback"
 //                                  ^^ Double slash breaks URL
 
 // Pipedream cannot deliver webhook to malformed URL
@@ -193,7 +193,7 @@ s, classes, etc.)
 
 3. **Updated `/lib/pipedream.ts`**:
    - Added `recurringEventId` optional parameter to `createMirrorEvent()`
-   - Stores `mircal_recurring_event_id` in extended properties for tracking
+   - Stores `calconnect_recurring_event_id` in extended properties for tracking
 
 4. **Database Migration 007**:
    - Added `is_recurring` column (boolean, default false)
@@ -636,7 +636,7 @@ Webhook received: {
   "status": "cancelled",
   "extendedProperties": {
     "private": {
-      "mircal_is_mirror": "true",
+      "calconnect_is_mirror": "true",
       ...
     }
   }
@@ -647,7 +647,7 @@ No mapping found for event 607p26hndg5j3gktu67um9rcrs
 ```
 
 **Root Cause:**
-The webhook handler checked if an event was a mirror AFTER processing deletion. When a `status: 'cancelled'` event was received (line 61-65), the system immediately processed deletion without checking the `mircal_is_mirror` extended property first.
+The webhook handler checked if an event was a mirror AFTER processing deletion. When a `status: 'cancelled'` event was received (line 61-65), the system immediately processed deletion without checking the `calconnect_is_mirror` extended property first.
 
 **Fix:**
 Moved the mirror check BEFORE the deletion check in `/app/api/webhook/route.ts`:
@@ -657,12 +657,12 @@ Moved the mirror check BEFORE the deletion check in `/app/api/webhook/route.ts`:
 if ((sourceEvent as any).status === 'cancelled') {
   await calendarSync.handleEventDeleted(...); // Processes mirror events
 }
-if ((sourceEvent as any).extendedProperties?.private?.mircal_is_mirror === 'true') {
+if ((sourceEvent as any).extendedProperties?.private?.calconnect_is_mirror === 'true') {
   return; // Too late - already processed
 }
 
 // AFTER: Check mirror status first
-if ((sourceEvent as any).extendedProperties?.private?.mircal_is_mirror === 'true') {
+if ((sourceEvent as any).extendedProperties?.private?.calconnect_is_mirror === 'true') {
   console.log('Skipping mirror event');
   return NextResponse.json({ received: true, skipped: 'mirror_event' });
 }
@@ -853,8 +853,8 @@ This marker serves as a "processed flag" so subsequent webhooks for the base eve
 
 **Files Affected:**
 - `/lib/calendar-sync.ts:274-363` - `createRecurringMirrors()` method
-- Test logs: `mircal_resources/project_docs/validation-2025-12-22/recurring_events_validation_server_logs_1.txt`
-- Test results: `mircal_resources/project_docs/validation-2025-12-22/recurring_events_validation_results.md`
+- Test logs: `calconnect_resources/project_docs/validation-2025-12-22/recurring_events_validation_server_logs_1.txt`
+- Test results: `calconnect_resources/project_docs/validation-2025-12-22/recurring_events_validation_results.md`
 
 **Fix Implementation (2024-12-22):**
 

@@ -41,7 +41,7 @@ Dependencies live in [package.json](package.json).
 ## 3. Directory map
 
 ```
-mircal-backend/
+calconnect/
 ├── app/                          # Next.js App Router
 │   ├── page.tsx                  # Marketing landing (V5 design)
 │   ├── privacy/, terms/          # Legal pages
@@ -175,7 +175,7 @@ Enforced in dashboard client + `api/accounts` server:
 - **Fallback portal link (support):** `https://billing.stripe.com/p/login/fZu3cv7CWdGbfig5jw2Ji00`
 
 ### Vercel
-- **Project:** connected to `nickyc1/mircal-backend` on `main`
+- **Project:** connected to `nickyc1/calconnect-backend` on `main`
 - **Cron:** `renew-watches` daily (defined in `vercel.json`)
 - **Env vars:** ~15 (see §8)
 
@@ -291,14 +291,14 @@ All live values are in 1Password: **CalConnect Stripe Live Keys (Production)**.
 ## 10. Deploy runbook
 
 ```bash
-cd /tmp/mircal-backend
+cd /tmp/calconnect-backend
 git add <files>
 git commit -m "..."
 git push
 ```
 
 Vercel auto-deploys `main` in ~90 seconds. Watch progress at
-https://vercel.com/nickyc1/mircal-backend.
+https://vercel.com/nickyc1/calconnect-backend.
 
 ### Rollback
 

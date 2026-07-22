@@ -1,6 +1,6 @@
-# MirCal - Vercel Deployment Instructions
+# CalConnect - Vercel Deployment Instructions
 
-This guide walks through deploying MirCal to Vercel for production use.
+This guide walks through deploying CalConnect to Vercel for production use.
 
 ---
 
@@ -55,7 +55,7 @@ Add these authorized redirect URIs:
 **Example:**
 ```
 https://ajnbnqvawgtewyyrnmno.supabase.co/auth/v1/callback
-https://mircal-production.vercel.app/auth/callback
+https://calconnect-production.vercel.app/auth/callback
 ```
 
 ### 1.4 Update Google OAuth Authorized JavaScript Origins
@@ -164,7 +164,7 @@ WEBHOOK_BASE_URL=https://your-vercel-domain.vercel.app
 
 1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
 2. Click "Add New Project"
-3. Import your GitHub repository: `mh550/mircal-backend`
+3. Import your GitHub repository: `mh550/calconnect-backend`
 4. Select the repository
 
 ### 4.2 Configure Build Settings
@@ -384,7 +384,7 @@ Verify:
 **Location:** Vercel Dashboard → Your Project → Settings → Domains
 
 1. Click "Add Domain"
-2. Enter your domain (e.g., `mircal.yourdomain.com`)
+2. Enter your domain (e.g., `calconnect.yourdomain.com`)
 3. Follow Vercel's DNS configuration instructions
 
 ### 9.2 Update Configuration
@@ -393,20 +393,20 @@ After domain is active, update these locations:
 
 1. **Vercel Environment Variables:**
    ```env
-   NEXT_PUBLIC_APP_URL=https://mircal.yourdomain.com
-   WEBHOOK_BASE_URL=https://mircal.yourdomain.com
+   NEXT_PUBLIC_APP_URL=https://calconnect.yourdomain.com
+   WEBHOOK_BASE_URL=https://calconnect.yourdomain.com
    ```
 
 2. **Supabase Site URL:**
    - Dashboard → Authentication → URL Configuration
-   - Update Site URL to `https://mircal.yourdomain.com`
+   - Update Site URL to `https://calconnect.yourdomain.com`
 
 3. **Supabase Redirect URLs:**
-   - Add `https://mircal.yourdomain.com/auth/callback`
+   - Add `https://calconnect.yourdomain.com/auth/callback`
 
 4. **Google OAuth:**
-   - Add to Authorized JavaScript Origins: `https://mircal.yourdomain.com`
-   - Add to Redirect URIs: `https://mircal.yourdomain.com/auth/callback`
+   - Add to Authorized JavaScript Origins: `https://calconnect.yourdomain.com`
+   - Add to Redirect URIs: `https://calconnect.yourdomain.com/auth/callback`
 
 5. **Redeploy** to apply changes
 
