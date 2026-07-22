@@ -515,6 +515,7 @@ export default async function Home() {
           <div className="cc-v5-foot-inner">
             <div>© 2026 RAX Digital LLC · CalConnect</div>
             <div className="cc-v5-foot-links">
+              <a href="/changelog">Changelog</a>
               <a href="/privacy">Privacy</a>
               <a href="/terms">Terms</a>
               <a href="mailto:nick@raxdigital.com">Contact</a>
