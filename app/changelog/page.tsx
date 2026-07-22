@@ -13,6 +13,12 @@ type Entry = {
 const shipped: Entry[] = [
   {
     date: 'Jul 22, 2026',
+    title: 'Per-calendar color + label customization',
+    body: 'For each source calendar, pick your own color and label ("Personal commitment", "CXL workshop", "focus time", whatever you want). Default is still a gray "Busy" block. Show up on your other calendars in the way that actually makes sense to you, without ever leaking event details.',
+    tag: 'ux',
+  },
+  {
+    date: 'Jul 22, 2026',
     title: 'Cancel subscription without deleting your account',
     body: 'Stripe Billing Portal integration. During trial you can cancel and not get charged; the account and any settings stay. Previously you had to nuke your whole account to stop billing.',
     tag: 'billing',
@@ -98,11 +104,6 @@ const inFlight: Entry[] = [
     title: 'Google OAuth verification submission',
     body: 'Recording the demo video, then submitting for Google\'s verification review. Approval takes 4-6 weeks. Once approved, the "unverified app" screen goes away.',
     tag: 'infra',
-  },
-  {
-    title: 'Per-calendar color + label customization',
-    body: 'Right now every mirrored block is a gray "Busy". Coming: pick a color and a label ("Personal commitment", "CXL workshop", "focus time", whatever) for each source calendar. So your work calendar can distinguish your personal source from your side-project source at a glance, without ever leaking event details.',
-    tag: 'ux',
   },
 ]
 

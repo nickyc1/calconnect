@@ -42,6 +42,13 @@ export class CalendarSyncService {
       };
     }
 
+    // Fetch the source account's per-source customization (color + label).
+    // These govern how mirrored blocks appear on the OTHER calendars, so a
+    // user can tell "block from personal" apart from "block from side project"
+    // at a glance without event details leaking.
+    const { sourceMirrorColorId, sourceMirrorLabel } =
+      await this.getSourceMirrorConfig(userId, sourceAccountId);
+
     // Handle recurring events
     if (isRecurringEvent(sourceEvent)) {
       console.log('Detected recurring event, expanding instances...');
@@ -50,7 +57,9 @@ export class CalendarSyncService {
         sourceAccountId,
         sourceCalendarId,
         sourceEvent,
-        destAccounts
+        destAccounts,
+        sourceMirrorColorId,
+        sourceMirrorLabel
       );
     }
 
@@ -67,7 +76,8 @@ export class CalendarSyncService {
             sourceEventId,
             sourceAccountId,
             sourceCalendarId,
-            colorId: dest.color_id || '1',
+            colorId: sourceMirrorColorId,
+            summary: sourceMirrorLabel,
           })
         );
 
@@ -112,6 +122,25 @@ export class CalendarSyncService {
   }
 
   /**
+   * Look up the source account's mirror display config. Returns safe defaults
+   * ('8' = Graphite, 'Busy') if the account row hasn't been customized yet,
+   * so this is safe to call before migration 015 has run in a given env.
+   */
+  private async getSourceMirrorConfig(userId: string, sourceAccountId: string) {
+    const { data } = await (supabaseAdmin as any)
+      .from('user_accounts')
+      .select('mirror_color_id, mirror_label')
+      .eq('user_id', userId)
+      .eq('account_id', sourceAccountId)
+      .maybeSingle();
+
+    return {
+      sourceMirrorColorId: (data && data.mirror_color_id) || '8',
+      sourceMirrorLabel: (data && data.mirror_label) || 'Busy',
+    };
+  }
+
+  /**
    * Create mirrors for a recurring event by expanding all instances
    */
   private async createRecurringMirrors(
@@ -119,7 +148,9 @@ export class CalendarSyncService {
     sourceAccountId: string,
     sourceCalendarId: string,
     sourceEvent: any,
-    destAccounts: any[]
+    destAccounts: any[],
+    sourceMirrorColorId: string,
+    sourceMirrorLabel: string
   ) {
     const baseEventId = sourceEvent.id;
     const instances = expandRecurringEvent(sourceEvent);
@@ -149,7 +180,8 @@ export class CalendarSyncService {
               sourceEventId: instanceId,
               sourceAccountId,
               sourceCalendarId,
-              colorId: dest.color_id || '1',
+              colorId: sourceMirrorColorId,
+            summary: sourceMirrorLabel,
               recurringEventId: baseEventId,
             })
           );

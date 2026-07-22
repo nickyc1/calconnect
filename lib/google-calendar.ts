@@ -42,19 +42,20 @@ class GoogleCalendarService {
       sourceAccountId: string;
       sourceCalendarId: string;
       colorId?: string;
+      summary?: string;
       recurringEventId?: string;
     }
   ): Promise<GoogleCalendarEvent> {
     const calendar = this.getCalendar(auth);
 
     const mirrorData: any = {
-      summary: 'Busy',
+      summary: eventData.summary || 'Busy',
       start: eventData.start,
       end: eventData.end,
       visibility: 'private',
       transparency: 'opaque',
       attendees: [],
-      colorId: eventData.colorId || '1',
+      colorId: eventData.colorId || '8',
       extendedProperties: {
         private: {
           calconnect_source_event_id: eventData.sourceEventId,

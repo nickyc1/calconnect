@@ -12,7 +12,25 @@ interface Account {
   is_active: boolean
   is_source_account: boolean
   needs_reauth?: boolean
+  mirror_color_id?: string
+  mirror_label?: string
 }
+
+// Google Calendar event colors — hex approximations so we can render a picker.
+// Values are the colorId strings Google's API expects.
+const GOOGLE_EVENT_COLORS: Array<{ id: string; hex: string; name: string }> = [
+  { id: '1',  hex: '#a4bdfc', name: 'Lavender' },
+  { id: '2',  hex: '#7ae7bf', name: 'Sage' },
+  { id: '3',  hex: '#dbadff', name: 'Grape' },
+  { id: '4',  hex: '#ff887c', name: 'Flamingo' },
+  { id: '5',  hex: '#fbd75b', name: 'Banana' },
+  { id: '6',  hex: '#ffb878', name: 'Tangerine' },
+  { id: '7',  hex: '#46d6db', name: 'Peacock' },
+  { id: '8',  hex: '#c9c9c9', name: 'Graphite' },
+  { id: '9',  hex: '#5484ed', name: 'Blueberry' },
+  { id: '10', hex: '#51b749', name: 'Basil' },
+  { id: '11', hex: '#dc2127', name: 'Tomato' },
+]
 
 interface Source {
   id: string
@@ -36,6 +54,11 @@ export default function DashboardPage() {
   const [billing, setBilling] = useState<{ plan: string; entitled_calendars: number; base_calendars: number; extra_calendars: number; subscription_status: string | null; current_period_end: string | null } | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState('')
+  // Local staging for per-source label edits so typing feels responsive; we
+  // commit to the server on blur or explicit save.
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({})
+  const [mirrorSaving, setMirrorSaving] = useState<string | null>(null)
+  const [mirrorSaved, setMirrorSaved] = useState<string | null>(null)
   const searchParams = useSearchParams()
 
   const supabase = createBrowserClient(
@@ -153,6 +176,43 @@ export default function DashboardPage() {
       }
     }
     window.location.href = '/api/auth/google/connect'
+  }
+
+  const saveMirrorConfig = async (
+    accountId: string,
+    patch: { mirrorColorId?: string; mirrorLabel?: string }
+  ) => {
+    setMirrorSaving(accountId)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/mirror-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setStatus(data?.error || 'Could not save. Try again.')
+        return
+      }
+      // Merge the server-returned values into local state so the UI reflects
+      // the authoritative version (trimmed label, validated color).
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.account_id === accountId
+            ? { ...a, mirror_color_id: data.mirrorColorId, mirror_label: data.mirrorLabel }
+            : a
+        )
+      )
+      setLabelDrafts((prev) => {
+        const next = { ...prev }
+        delete next[accountId]
+        return next
+      })
+      setMirrorSaved(accountId)
+      setTimeout(() => setMirrorSaved((cur) => (cur === accountId ? null : cur)), 1500)
+    } finally {
+      setMirrorSaving(null)
+    }
   }
 
   const toggleSourceAccount = async (accountId: string, isSource: boolean) => {
@@ -473,9 +533,10 @@ export default function DashboardPage() {
                 borderRadius: '4px',
                 marginBottom: '0.5rem',
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
+                flexDirection: 'column',
+                gap: '0.65rem',
               }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <strong>{account.google_email || account.account_display_name || account.account_id}</strong>
                   {account.is_source_account && (
@@ -546,6 +607,94 @@ export default function DashboardPage() {
                     Remove
                   </button>
                 </div>
+              </div>
+
+              {account.is_source_account && (() => {
+                const currentColor = account.mirror_color_id || '8'
+                const currentLabel =
+                  labelDrafts[account.account_id] !== undefined
+                    ? labelDrafts[account.account_id]
+                    : (account.mirror_label || 'Busy')
+                const savingThis = mirrorSaving === account.account_id
+                return (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    paddingTop: '0.5rem',
+                    borderTop: '1px dashed #e5e5e5',
+                  }}>
+                    <span style={{ fontSize: '0.8rem', color: '#666' }}>
+                      Mirrored blocks show as
+                    </span>
+                    <input
+                      type="text"
+                      value={currentLabel}
+                      maxLength={60}
+                      onChange={(e) =>
+                        setLabelDrafts((prev) => ({ ...prev, [account.account_id]: e.target.value }))
+                      }
+                      onBlur={() => {
+                        const draft = labelDrafts[account.account_id]
+                        if (draft === undefined) return
+                        const trimmed = draft.trim()
+                        if (trimmed.length === 0 || trimmed === (account.mirror_label || 'Busy')) {
+                          setLabelDrafts((prev) => {
+                            const next = { ...prev }; delete next[account.account_id]; return next
+                          })
+                          return
+                        }
+                        saveMirrorConfig(account.account_id, { mirrorLabel: trimmed })
+                      }}
+                      disabled={savingThis}
+                      placeholder="Busy"
+                      style={{
+                        padding: '0.35rem 0.55rem',
+                        border: '1px solid #d5d3ce',
+                        borderRadius: 4,
+                        fontSize: '0.85rem',
+                        width: '160px',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.8rem', color: '#666' }}>in this color</span>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {GOOGLE_EVENT_COLORS.map((c) => {
+                        const selected = c.id === currentColor
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            title={c.name}
+                            aria-label={c.name}
+                            disabled={savingThis}
+                            onClick={() =>
+                              !selected && saveMirrorConfig(account.account_id, { mirrorColorId: c.id })
+                            }
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: '50%',
+                              background: c.hex,
+                              border: selected ? '2px solid #14140f' : '1px solid rgba(0,0,0,0.15)',
+                              cursor: savingThis ? 'wait' : (selected ? 'default' : 'pointer'),
+                              padding: 0,
+                              boxShadow: selected ? '0 0 0 2px rgba(20,20,15,0.15)' : 'none',
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      color: mirrorSaved === account.account_id ? '#0e6b2f' : '#999',
+                      minWidth: 60,
+                    }}>
+                      {savingThis ? 'Saving…' : (mirrorSaved === account.account_id ? 'Saved' : '')}
+                    </span>
+                  </div>
+                )
+              })()}
               </li>
             ))}
           </ul>

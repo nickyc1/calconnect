@@ -18,6 +18,8 @@ export interface UserAccount {
   is_active: boolean;
   calendar_id: string;
   color_id?: string;
+  mirror_color_id?: string;
+  mirror_label?: string;
   refresh_token: string;
   access_token: string;
   token_expiry: string;
