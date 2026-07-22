@@ -57,71 +57,91 @@ export async function POST() {
     }
 
     const webhookUrl = `${process.env.WEBHOOK_BASE_URL}/api/webhook`;
-    const channelRecords: any[] = [];
 
-    // Set up watch channels for each source account
-    for (const sourceAccount of sourceAccounts) {
-      try {
-        const auth = await googleAuth.getClientByAccountId(
-          user.id,
-          (sourceAccount as any).account_id
-        );
+    // Set up watch channels for every source in parallel. Sequential loops
+    // over 3+ sources hit ~10s each because every source triggers a Google
+    // OAuth token refresh + a watch API call + an initial-sync fetch. Running
+    // in parallel drops enable-mirroring latency to the slowest single account
+    // (usually 3-8s), not the sum.
+    type WatchOutcome =
+      | { ok: true; record: any; displayName: string }
+      | { ok: false; displayName: string; error: any };
 
-        // Set up push notification watch channel
-        const watchResult = await googleCalendar.watchCalendar(
-          auth,
-          'primary',
-          webhookUrl
-        );
+    const outcomes: WatchOutcome[] = await Promise.all(
+      sourceAccounts.map(async (sourceAccount: any): Promise<WatchOutcome> => {
+        const displayName =
+          sourceAccount.account_display_name || sourceAccount.account_id;
+        try {
+          const auth = await googleAuth.getClientByAccountId(
+            user.id,
+            sourceAccount.account_id,
+          );
 
-        // Do an initial sync to get the sync token
-        const { nextSyncToken } = await googleCalendar.listChangedEvents(
-          auth,
-          'primary'
-        );
+          // Set up push notification watch channel + initial sync token in
+          // parallel — they don't depend on each other and both add latency.
+          const [watchResult, syncResult] = await Promise.all([
+            googleCalendar.watchCalendar(auth, 'primary', webhookUrl),
+            googleCalendar.listChangedEvents(auth, 'primary'),
+          ]);
 
-        channelRecords.push({
-          user_id: user.id,
-          account_id: (sourceAccount as any).account_id,
-          calendar_id: 'primary',
-          channel_id: watchResult.channelId,
-          resource_id: watchResult.resourceId,
-          expiration: watchResult.expiration,
-          webhook_url: webhookUrl,
-          sync_token: nextSyncToken,
-        });
+          console.log(`Watch channel created for ${displayName}`);
+          return {
+            ok: true,
+            displayName,
+            record: {
+              user_id: user.id,
+              account_id: sourceAccount.account_id,
+              calendar_id: 'primary',
+              channel_id: watchResult.channelId,
+              resource_id: watchResult.resourceId,
+              expiration: watchResult.expiration,
+              webhook_url: webhookUrl,
+              sync_token: syncResult.nextSyncToken,
+            },
+          };
+        } catch (err) {
+          console.error(
+            `Error creating watch for account ${sourceAccount.account_id}:`,
+            err,
+          );
+          return { ok: false, displayName, error: err };
+        }
+      }),
+    );
 
-        console.log(
-          `Watch channel created for ${(sourceAccount as any).account_display_name || (sourceAccount as any).account_id}`
-        );
-      } catch (deployError: any) {
-        console.error(
-          `Error creating watch for account ${(sourceAccount as any).account_id}:`,
-          deployError
-        );
+    const failures = outcomes.filter((o): o is Extract<WatchOutcome, { ok: false }> => !o.ok);
+    const successes = outcomes.filter((o): o is Extract<WatchOutcome, { ok: true }> => o.ok);
 
-        // Clean up any channels created so far
-        for (const record of channelRecords) {
+    // If any account failed, tear down the ones that succeeded so we don't
+    // leave a partial mirroring config running. Cleanups also in parallel.
+    if (failures.length > 0) {
+      await Promise.all(
+        successes.map(async (s) => {
           try {
             const cleanupAuth = await googleAuth.getClientByAccountId(
               user.id,
-              record.account_id
+              s.record.account_id,
             );
             await googleCalendar.stopWatch(
               cleanupAuth,
-              record.channel_id,
-              record.resource_id
+              s.record.channel_id,
+              s.record.resource_id,
             );
           } catch (cleanupError) {
             console.error('Cleanup error:', cleanupError);
           }
-        }
+        }),
+      );
 
-        return NextResponse.json({
-          error: `Failed to set up watch for account ${(sourceAccount as any).account_display_name}`,
-        }, { status: 500 });
-      }
+      return NextResponse.json(
+        {
+          error: `Failed to set up watch for account ${failures[0].displayName}`,
+        },
+        { status: 500 },
+      );
     }
+
+    const channelRecords = successes.map((s) => s.record);
 
     // Store all channel records in database
     const { error: insertError } = await (supabaseAdmin as any)
