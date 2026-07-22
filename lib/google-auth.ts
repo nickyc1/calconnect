@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { supabaseAdmin } from './supabase';
+import { encryptTokenSafe } from './token-crypto';
 
 const SCOPES = [
   'openid',
@@ -106,7 +107,10 @@ class GoogleAuthService {
         const { credentials } = await client.refreshAccessToken();
         client.setCredentials(credentials);
 
-        // Store refreshed tokens
+        // Store refreshed tokens (Day 1 dual-write: plaintext + encrypted).
+        // encryptTokenSafe never throws — if the key env var is missing the
+        // encrypted column stays NULL and reads still work off plaintext.
+        const encAccess = encryptTokenSafe(credentials.access_token || null);
         await (supabaseAdmin as any)
           .from('user_accounts')
           .update({
@@ -114,6 +118,8 @@ class GoogleAuthService {
             token_expiry: credentials.expiry_date
               ? new Date(credentials.expiry_date).toISOString()
               : null,
+            access_token_encrypted: encAccess.ciphertextPg,
+            key_version: encAccess.keyVersion,
           })
           .eq('id', accountId);
       } catch (err: any) {

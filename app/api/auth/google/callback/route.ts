@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { googleAuth } from '@/lib/google-auth';
+import { encryptTokenSafe } from '@/lib/token-crypto';
 
 /**
  * GET /api/auth/google/callback
@@ -58,6 +59,9 @@ export async function GET(request: NextRequest) {
 
     if (existingAccount) {
       // Update existing account tokens; clear reauth flag if it was set.
+      // Day 1 dual-write: plaintext (existing) + encrypted (new nullable columns).
+      const encRefresh = encryptTokenSafe(refreshToken);
+      const encAccess = encryptTokenSafe(accessToken);
       await (supabaseAdmin as any)
         .from('user_accounts')
         .update({
@@ -67,6 +71,9 @@ export async function GET(request: NextRequest) {
           is_active: true,
           needs_reauth: false,
           reauth_flagged_at: null,
+          refresh_token_encrypted: encRefresh.ciphertextPg,
+          access_token_encrypted: encAccess.ciphertextPg,
+          key_version: encRefresh.keyVersion,
         })
         .eq('id', (existingAccount as any).id);
 
@@ -108,6 +115,12 @@ export async function GET(request: NextRequest) {
     // Use email as the account_id (unique per user)
     const accountId = email;
 
+    // Day 1 dual-write: plaintext (existing) + encrypted (new nullable columns).
+    // encryptTokenSafe never throws — a missing key env just leaves the
+    // encrypted columns NULL and reads still work off plaintext.
+    const encRefresh = encryptTokenSafe(refreshToken);
+    const encAccess = encryptTokenSafe(accessToken);
+
     const { error: insertError } = await (supabaseAdmin as any)
       .from('user_accounts')
       .insert({
@@ -120,6 +133,9 @@ export async function GET(request: NextRequest) {
         token_expiry: new Date(expiryDate).toISOString(),
         is_active: true,
         is_source_account: false,
+        refresh_token_encrypted: encRefresh.ciphertextPg,
+        access_token_encrypted: encAccess.ciphertextPg,
+        key_version: encRefresh.keyVersion,
       } as any);
 
     if (insertError) {

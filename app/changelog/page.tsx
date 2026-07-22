@@ -82,7 +82,7 @@ const shipped: Entry[] = [
 const inFlight: Entry[] = [
   {
     title: 'Refresh tokens encrypted at rest (phase 1)',
-    body: 'Google OAuth refresh tokens live in our database unencrypted today. Rolling out symmetric encryption via Postgres pgcrypto over the next 2-3 days: dual-write, backfill, cutover, drop plaintext. After this, a stolen database backup would show only ciphertext. This closes the Supabase-breach and backup-theft risks. It does NOT close the "both Vercel and Supabase compromised at once" risk — phase 2 (moving the key to a cloud KMS) will. Being explicit so nobody thinks "encrypted" means "unbreakable."',
+    body: 'Google OAuth refresh tokens live in our database unencrypted today. Rolling out symmetric AES-256-GCM encryption over the next 2-3 days: Day 1 dual-write ships now (new tokens land encrypted alongside the existing plaintext column, no user-visible change), Day 2 backfills existing rows and flips reads to the encrypted column, Day 3 drops plaintext entirely. After the rollout, a stolen database backup would show only ciphertext. This closes the Supabase-breach and backup-theft risks. It does NOT close the "both Vercel and Supabase compromised at once" risk — phase 2 (moving the key to a cloud KMS) will. Being explicit so nobody thinks "encrypted" means "unbreakable."',
     tag: 'security',
   },
   {
