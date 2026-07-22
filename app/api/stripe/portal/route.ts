@@ -29,12 +29,41 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    const customerId: string | undefined = (billing as any)?.stripe_customer_id || undefined;
+    let customerId: string | undefined = (billing as any)?.stripe_customer_id || undefined;
     if (!customerId) {
       return NextResponse.json(
         { error: 'No subscription to manage yet.' },
         { status: 400 }
       );
+    }
+
+    // Same stale-customer defense as /api/stripe/checkout — if the stored
+    // id lives only in a Stripe mode we've since left (or was deleted),
+    // clear it and ask the user to complete checkout first. We don't
+    // silently create a new empty customer here because the portal expects
+    // real subscription state to manage.
+    try {
+      const existing = await stripe.customers.retrieve(customerId);
+      if ((existing as any).deleted) {
+        customerId = undefined;
+      }
+    } catch (err: any) {
+      const code = err?.code || err?.raw?.code;
+      const status = err?.statusCode || err?.raw?.statusCode;
+      if (code === 'resource_missing' || status === 404) {
+        console.log(
+          `stripe/portal: stored customer ${customerId} not found in current Stripe account for user ${user.id}`,
+        );
+        await (supabaseAdmin as any)
+          .from('user_billing')
+          .update({ stripe_customer_id: null, updated_at: new Date().toISOString() })
+          .eq('user_id', user.id);
+        return NextResponse.json(
+          { error: 'No active subscription found. Please subscribe first.' },
+          { status: 400 },
+        );
+      }
+      throw err;
     }
 
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://www.calconnect.io';

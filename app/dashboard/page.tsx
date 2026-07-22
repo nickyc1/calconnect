@@ -297,9 +297,12 @@ export default function DashboardPage() {
   }
 
   const removeAccount = async (accountId: string, accountName: string) => {
-    if (!confirm(`Remove ${accountName}? This action cannot be undone.`)) {
-      return
-    }
+    const account = accounts.find((a) => a.account_id === accountId)
+    const wasSourceWithMirroring = account?.is_source_account && hasActiveSources
+    const warning = wasSourceWithMirroring
+      ? `Remove ${accountName}?\n\nMirroring on your other calendars keeps running. "Busy" blocks that were already written from this source will stay on your other calendars until you delete them manually in Google Calendar.\n\nThis cannot be undone.`
+      : `Remove ${accountName}? This cannot be undone.`
+    if (!confirm(warning)) return
 
     setActionLoading(true)
     setStatus('Removing account...')
@@ -591,18 +594,18 @@ export default function DashboardPage() {
                   </label>
                   <button
                     onClick={() => removeAccount(account.account_id, account.google_email || account.account_display_name || account.account_id)}
-                    disabled={actionLoading || hasActiveSources}
+                    disabled={actionLoading}
                     style={{
                       padding: '0.4rem 0.8rem',
-                      background: hasActiveSources ? '#ccc' : '#dc3545',
+                      background: '#dc3545',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
                       fontSize: '0.85rem',
-                      cursor: (actionLoading || hasActiveSources) ? 'not-allowed' : 'pointer',
-                      opacity: (actionLoading || hasActiveSources) ? 0.5 : 1
+                      cursor: actionLoading ? 'not-allowed' : 'pointer',
+                      opacity: actionLoading ? 0.5 : 1,
                     }}
-                    title={hasActiveSources ? 'Disable mirroring first' : 'Remove account'}
+                    title="Remove this connected calendar"
                   >
                     Remove
                   </button>

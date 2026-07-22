@@ -49,6 +49,33 @@ export async function POST(req: NextRequest) {
 
     let customerId: string | undefined = (billing as any)?.stripe_customer_id || undefined;
 
+    // Validate the stored customer id still exists in the *current* Stripe
+    // account/mode. Two ways this can go stale:
+    //   1) We switched Stripe modes (sandbox -> live) and the old id lives
+    //      only in sandbox. This is exactly what happened during the live
+    //      cutover on 2026-07-22.
+    //   2) A customer was manually deleted in the Stripe dashboard.
+    // In either case, treat it as "no customer" and create a fresh one.
+    if (customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(customerId);
+        if ((existing as any).deleted) {
+          customerId = undefined;
+        }
+      } catch (err: any) {
+        const code = err?.code || err?.raw?.code;
+        const status = err?.statusCode || err?.raw?.statusCode;
+        if (code === 'resource_missing' || status === 404) {
+          console.log(
+            `stripe/checkout: stored customer ${customerId} not found in current Stripe account, creating a new one for user ${user.id}`,
+          );
+          customerId = undefined;
+        } else {
+          throw err;
+        }
+      }
+    }
+
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email || undefined,
