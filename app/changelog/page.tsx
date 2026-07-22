@@ -212,7 +212,7 @@ export default function Changelog() {
 
       <p style={{ marginTop: '3rem', color: '#8a7f6b', fontSize: '0.9rem' }}>
         Missing something you&apos;d like to see?{' '}
-        <a href="mailto:nick@raxdigital.com" style={{ color: '#8a7f6b' }}>Email me.</a>
+        <a href="mailto:n.christensen4@gmail.com" style={{ color: '#8a7f6b' }}>Email me.</a>
       </p>
     </div>
   )

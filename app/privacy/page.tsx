@@ -21,7 +21,7 @@ export default function PrivacyPolicy() {
       <p>
         CalConnect ("we," "us") is a Google Calendar mirroring tool operated by RAX Digital LLC.
         This policy explains what information we collect, how we use it, and the controls you have.
-        Questions? Email <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a>.
+        Questions? Email <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a>.
       </p>
 
       <h2 style={h2}>What data we access</h2>
@@ -91,7 +91,7 @@ export default function PrivacyPolicy() {
       </p>
       <ul>
         <li>Disconnect a Google account from your CalConnect dashboard, which deletes the stored tokens for that account and stops the mirroring watch channels</li>
-        <li>Delete your CalConnect account entirely by emailing <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a>. All associated data is deleted within 30 days.</li>
+        <li>Delete your CalConnect account entirely by emailing <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a>. All associated data is deleted within 30 days.</li>
         <li>Revoke CalConnect's access from your Google account at any time by visiting <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a></li>
       </ul>
 
@@ -107,7 +107,7 @@ export default function PrivacyPolicy() {
       <h2 style={h2}>Your rights</h2>
       <p>
         You have the right to access, correct, or delete your personal data. To exercise any of these rights,
-        email <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a>. We respond within 30 days.
+        email <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a>. We respond within 30 days.
       </p>
 
       <h2 style={h2}>Changes to this policy</h2>
@@ -120,7 +120,7 @@ export default function PrivacyPolicy() {
       <p>
         RAX Digital LLC<br />
         Attn: CalConnect Privacy<br />
-        Email: <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a>
+        Email: <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a>
       </p>
     </div>
   )

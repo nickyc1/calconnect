@@ -497,7 +497,7 @@ export default async function Home() {
               </div>
               <div className="cc-v5-q">
                 <h3>Who built this?</h3>
-                <p>Nick Christensen. Ran into the three-calendar problem myself and got tired of the workarounds. RAX Digital LLC. Reach me at <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a>.</p>
+                <p>Nick Christensen. Ran into the three-calendar problem myself and got tired of the workarounds. RAX Digital LLC. Reach me at <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a>.</p>
               </div>
             </div>
           </div>
@@ -518,7 +518,7 @@ export default async function Home() {
               <a href="/changelog">Changelog</a>
               <a href="/privacy">Privacy</a>
               <a href="/terms">Terms</a>
-              <a href="mailto:nick@raxdigital.com">Contact</a>
+              <a href="mailto:n.christensen4@gmail.com">Contact</a>
             </div>
           </div>
         </footer>

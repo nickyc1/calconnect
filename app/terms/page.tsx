@@ -34,7 +34,7 @@ export default function TermsOfService() {
       <p>
         You need a Google account to use CalConnect. You are responsible for maintaining the security of the Google
         accounts you connect and for all activity that occurs under your CalConnect account. Notify us immediately at{' '}
-        <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a> if you suspect unauthorized access.
+        <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a> if you suspect unauthorized access.
       </p>
 
       <h2 style={h2}>3. Acceptable use</h2>
@@ -110,7 +110,7 @@ export default function TermsOfService() {
       <p>
         RAX Digital LLC<br />
         Attn: CalConnect Legal<br />
-        Email: <a href="mailto:nick@raxdigital.com">nick@raxdigital.com</a>
+        Email: <a href="mailto:n.christensen4@gmail.com">n.christensen4@gmail.com</a>
       </p>
     </div>
   )
