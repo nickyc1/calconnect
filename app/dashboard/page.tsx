@@ -298,6 +298,24 @@ export default function DashboardPage() {
     window.location.href = '/'
   }
 
+  const [portalLoading, setPortalLoading] = useState(false)
+  const openBillingPortal = async () => {
+    setPortalLoading(true)
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.url) {
+        alert(data?.error || 'Could not open billing portal. Contact support.')
+        setPortalLoading(false)
+        return
+      }
+      window.location.href = data.url
+    } catch (err: any) {
+      alert(err?.message || 'Could not open billing portal.')
+      setPortalLoading(false)
+    }
+  }
+
   const sourceAccounts = accounts.filter(a => a.is_source_account)
   const hasActiveSources = sources.length > 0
 
@@ -681,6 +699,22 @@ export default function DashboardPage() {
         >
           Delete my account
         </button>
+
+        <div style={{ marginTop: '0.9rem', fontSize: '0.8rem', color: '#888' }}>
+          Just want to stop billing?{' '}
+          <a
+            href="#"
+            onClick={(e) => { e.preventDefault(); if (!portalLoading) openBillingPortal(); }}
+            style={{
+              color: '#666',
+              textDecoration: 'underline',
+              cursor: portalLoading ? 'wait' : 'pointer',
+            }}
+          >
+            {portalLoading ? 'Opening…' : 'Cancel my subscription'}
+          </a>
+          <span style={{ color: '#aaa' }}> — keeps your account, stops future charges.</span>
+        </div>
       </div>
 
       {showUpgrade && (
