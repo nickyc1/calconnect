@@ -1,7 +1,38 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { supabaseAdmin } from './supabase';
-import { encryptTokenSafe } from './token-crypto';
+import { encryptTokenSafe, decryptToken, pgByteaToBuffer } from './token-crypto';
+
+/**
+ * Day 2 read helper: prefer encrypted column, fall back to plaintext.
+ *
+ * Zero-downtime property: rows that haven't been backfilled yet (encrypted =
+ * NULL) still read from plaintext. Rows where decryption fails for any
+ * reason (bad key, corrupt cipher) also fall back to plaintext with a warn
+ * log so we can spot the failure without user impact.
+ *
+ * When we hit Day 3 (drop plaintext column), this function tightens up:
+ * fallback disappears and decryption failures become "reauth required."
+ */
+function readTokenPreferEncrypted(
+  account: any,
+  encryptedField: string,
+  plaintextField: string,
+): string | null {
+  const enc = account?.[encryptedField];
+  const keyVersion = account?.key_version;
+  if (enc && keyVersion) {
+    try {
+      return decryptToken(pgByteaToBuffer(enc), keyVersion);
+    } catch (err: any) {
+      console.warn(
+        `[token-crypto] decrypt failed on ${plaintextField}, falling back to plaintext:`,
+        err?.message || err,
+      );
+    }
+  }
+  return account?.[plaintextField] || null;
+}
 
 const SCOPES = [
   'openid',
@@ -80,7 +111,7 @@ class GoogleAuthService {
   async getClientForAccount(accountId: string): Promise<OAuth2Client> {
     const { data: account, error } = await supabaseAdmin
       .from('user_accounts')
-      .select('refresh_token, access_token, token_expiry, account_id')
+      .select('refresh_token, access_token, token_expiry, account_id, refresh_token_encrypted, access_token_encrypted, key_version')
       .eq('id', accountId)
       .single();
 
@@ -88,10 +119,13 @@ class GoogleAuthService {
       throw new Error(`Account not found: ${accountId}`);
     }
 
+    const refreshToken = readTokenPreferEncrypted(account, 'refresh_token_encrypted', 'refresh_token');
+    const accessToken = readTokenPreferEncrypted(account, 'access_token_encrypted', 'access_token');
+
     const client = this.createBaseClient();
     client.setCredentials({
-      refresh_token: (account as any).refresh_token,
-      access_token: (account as any).access_token,
+      refresh_token: refreshToken || undefined,
+      access_token: accessToken || undefined,
       expiry_date: (account as any).token_expiry
         ? new Date((account as any).token_expiry).getTime()
         : undefined,
