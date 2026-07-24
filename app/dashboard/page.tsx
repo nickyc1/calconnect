@@ -920,7 +920,7 @@ export default function DashboardPage() {
               >
                 <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#14140f' }}>Pro</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$10/mo</div>
-                <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>10 calendars + AI summaries</div>
+                <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>10 calendars + custom colors</div>
                 {billing?.plan === 'free' && (
                   <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7 days free · cancel any time</div>
                 )}

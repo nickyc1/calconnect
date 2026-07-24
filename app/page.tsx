@@ -461,7 +461,7 @@ export default async function Home() {
                   <li>Real-time push notification sync</li>
                   <li>Recurring &amp; bidirectional mirroring</li>
                   <li>Privacy-preserving &quot;Busy&quot; blocks</li>
-                  <li>Weekly AI event summaries</li>
+                  <li>Custom color and label per source calendar</li>
                   <li>Priority email support</li>
                   <li>Add calendars any time · $4/mo each</li>
                 </ul>

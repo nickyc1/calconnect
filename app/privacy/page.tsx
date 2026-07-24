@@ -75,7 +75,16 @@ export default function PrivacyPolicy() {
         <li>Does not use your data for advertising, targeting, or ad personalization</li>
         <li>Does not sell your data to third parties</li>
         <li>Does not allow humans to read your data except (a) with your explicit permission, (b) to comply with applicable law, (c) as necessary to investigate a specific abuse report, or (d) to perform limited debugging where data is aggregated and anonymized</li>
+        <li><strong>Does not use your Google Workspace data (raw, aggregated, or derived) to develop, train, refine, or improve any AI or machine learning models</strong>, whether operated by CalConnect or by any third party</li>
+        <li>Does not transfer your Google Workspace data to any third-party AI or machine learning service</li>
       </ul>
+      <p>
+        <strong>Limited Use Compliance Statement:</strong> The use of raw or derived user data received
+        from Google Workspace APIs by CalConnect will adhere to the{' '}
+        <a href="https://developers.google.com/workspace/workspace-api-user-data-developer-policy" target="_blank" rel="noopener noreferrer">
+          Google Workspace API User Data and Developer Policy
+        </a>, including the Limited Use requirements.
+      </p>
 
       <h2 style={h2}>Data storage and security</h2>
       <p>

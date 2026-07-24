@@ -159,7 +159,7 @@ export default function OnboardingPage() {
               <div className="ob-plan-what">10 connected Google Calendars</div>
               <ul className="ob-list">
                 <li>Everything in Basic</li>
-                <li>Weekly AI event summaries</li>
+                <li>Custom color and label per source calendar</li>
                 <li>Priority email support</li>
               </ul>
               <div className="ob-plan-trial">7 days free · cancel any time</div>
