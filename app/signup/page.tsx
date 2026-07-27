@@ -85,6 +85,7 @@ function SignupContent() {
     }
 
     // Auto-confirm path: session is live, go straight to onboarding.
+    document.cookie = `cc_last_auth=email; max-age=${60 * 60 * 24 * 180}; path=/; SameSite=Lax`
     router.push('/onboarding')
   }
 

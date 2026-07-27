@@ -3,7 +3,7 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 
 // Allowed paths we'll redirect to after login. Prefix match (so /redeem?code=…
 // still works). Never allow protocol-relative // — that's an open-redirect vector.
@@ -31,6 +31,16 @@ function LoginContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'google' | 'email'>('google')
+  // Read cc_last_auth cookie set by /auth/callback (google) or submitEmailLogin
+  // (email). Used to nudge the user toward whichever method they used last.
+  const [lastAuth, setLastAuth] = useState<'google' | 'email' | null>(null)
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const match = document.cookie.match(/(?:^|;\s*)cc_last_auth=([^;]+)/)
+    if (match && (match[1] === 'google' || match[1] === 'email')) {
+      setLastAuth(match[1] as 'google' | 'email')
+    }
+  }, [])
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createBrowserClient(
@@ -83,6 +93,8 @@ function LoginContent() {
       setLoading(false)
       return
     }
+    // Remember this login method so next visit can nudge toward email again.
+    document.cookie = `cc_last_auth=email; max-age=${60 * 60 * 24 * 180}; path=/; SameSite=Lax`
     router.push(next)
   }
 
@@ -151,11 +163,19 @@ function LoginContent() {
             borderRadius: '4px',
             fontSize: '1rem',
             cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.7 : 1
+            opacity: loading ? 0.7 : 1,
+            position: 'relative',
           }}
         >
           {loading && mode === 'google' ? buttonLabelLoading : buttonLabel}
         </button>
+        {lastAuth === 'google' && !loading && (
+          <div style={{
+            marginTop: 6, fontSize: 12, color: '#1e5f22', fontWeight: 500,
+          }}>
+            ✓ You used Google last time
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '1.25rem 0', color: '#999', fontSize: 12 }}>
           <div style={{ flex: 1, height: 1, background: '#e5e5e5' }} />
@@ -177,7 +197,10 @@ function LoginContent() {
               border: '1px solid #d5d3ce', borderRadius: 6, fontSize: 14, marginBottom: 12,
             }}
           />
-          <label style={{ display: 'block', fontSize: 13, color: '#555', marginBottom: 4 }}>Password</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <label style={{ fontSize: 13, color: '#555' }}>Password</label>
+            <Link href="/forgot-password" style={{ fontSize: 12, color: '#8a887f', textDecoration: 'underline' }}>Forgot password?</Link>
+          </div>
           <input
             type="password"
             value={password}
@@ -189,6 +212,11 @@ function LoginContent() {
               border: '1px solid #d5d3ce', borderRadius: 6, fontSize: 14,
             }}
           />
+          {lastAuth === 'email' && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#1e5f22', fontWeight: 500 }}>
+              ✓ You used email last time
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading || !email.trim() || !password}

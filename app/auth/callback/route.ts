@@ -37,7 +37,16 @@ export async function GET(request: Request) {
         }
       }
 
-      return NextResponse.redirect(`${origin}${next}`)
+      // Remember that this session came from Google OAuth so /login can nudge
+      // the user toward the same button next time. Cookie is intentionally
+      // NOT HttpOnly so the login page (client component) can read it.
+      const response = NextResponse.redirect(`${origin}${next}`)
+      response.cookies.set('cc_last_auth', 'google', {
+        maxAge: 60 * 60 * 24 * 180, // 180 days
+        path: '/',
+        sameSite: 'lax',
+      })
+      return response
     }
   }
 
