@@ -130,27 +130,6 @@ function LoginContent() {
           </div>
         )}
 
-        <div style={{
-          background: '#fff8e1',
-          border: '1px solid #f0d174',
-          borderRadius: '8px',
-          padding: '0.9rem 1rem',
-          marginBottom: '1.25rem',
-          textAlign: 'left',
-          fontSize: '0.85rem',
-          lineHeight: 1.5,
-          color: '#5c4a10'
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
-            Heads up: Google will show a warning
-          </div>
-          <div>
-            We&apos;re finalizing Google&apos;s verification (4-6 weeks). Until then, you&apos;ll see &quot;Google hasn&apos;t verified this app&quot;.
-            Click <strong>Advanced</strong> → <strong>Go to CalConnect (unsafe)</strong> to continue. Your data stays private — see our{' '}
-            <a href="/privacy" style={{ color: '#5c4a10', textDecoration: 'underline' }}>Privacy Policy</a>.
-          </div>
-        </div>
-
         <button
           onClick={() => { setMode('google'); handleGoogleLogin() }}
           disabled={loading}
@@ -197,10 +176,7 @@ function LoginContent() {
               border: '1px solid #d5d3ce', borderRadius: 6, fontSize: 14, marginBottom: 12,
             }}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-            <label style={{ fontSize: 13, color: '#555' }}>Password</label>
-            <Link href="/forgot-password" style={{ fontSize: 12, color: '#8a887f', textDecoration: 'underline' }}>Forgot password?</Link>
-          </div>
+          <label style={{ display: 'block', fontSize: 13, color: '#555', marginBottom: 4 }}>Password</label>
           <input
             type="password"
             value={password}
@@ -212,6 +188,9 @@ function LoginContent() {
               border: '1px solid #d5d3ce', borderRadius: 6, fontSize: 14,
             }}
           />
+          <div style={{ marginTop: 6, textAlign: 'right' }}>
+            <Link href="/forgot-password" style={{ fontSize: 12, color: '#8a887f', textDecoration: 'underline' }}>Forgot password?</Link>
+          </div>
           {lastAuth === 'email' && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#1e5f22', fontWeight: 500 }}>
               ✓ You used email last time

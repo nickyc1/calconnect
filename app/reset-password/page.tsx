@@ -30,17 +30,52 @@ export default function ResetPasswordPage() {
   )
 
   useEffect(() => {
-    // Supabase auto-exchanges the recovery token in the URL fragment. We wait
-    // briefly, then check if we have a session. If not, the link was invalid
-    // or expired.
-    const t = setTimeout(async () => {
+    // Supabase auto-exchanges the recovery token in the URL fragment. We
+    // listen for the PASSWORD_RECOVERY event (or any session that appears),
+    // AND we poll getSession() every 300ms up to 5 seconds. Whichever wins
+    // marks the page ready. If neither fires within 5s, we show
+    // "invalid_link".
+    //
+    // Earlier version used a single 400ms timeout which raced with Supabase's
+    // token exchange and false-triggered "Link expired" for valid links.
+    let done = false
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const markReady = () => {
+      if (done) return
+      done = true
+      if (intervalId) clearInterval(intervalId)
+      setReady(true)
+    }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        markReady()
+      }
+    })
+
+    // Also poll — some browser/URL-fragment races fire the auth event before
+    // React attaches the listener. getSession catches those.
+    intervalId = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) markReady()
+    }, 300)
+
+    // Fallback: after 5s if we still have no session, declare the link expired.
+    const fallback = setTimeout(async () => {
+      if (done) return
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         setState('invalid_link')
       }
-      setReady(true)
-    }, 400)
-    return () => clearTimeout(t)
+      markReady()
+    }, 5000)
+
+    return () => {
+      clearTimeout(fallback)
+      if (intervalId) clearInterval(intervalId)
+      sub.subscription.unsubscribe()
+    }
   }, [supabase])
 
   const submit = async (e: React.FormEvent) => {

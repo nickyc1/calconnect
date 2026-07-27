@@ -104,12 +104,6 @@ function SignupContent() {
             </div>
           ) : (
             <>
-              <div className="su-warn">
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Heads up: Google will show a warning</div>
-                Google is finalizing our verification (4-6 weeks). If you continue with Google, click{' '}
-                <strong>Advanced → Go to CalConnect (unsafe)</strong> to continue.
-              </div>
-
               <button
                 type="button"
                 className="su-btn su-btn-google"

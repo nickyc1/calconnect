@@ -12,6 +12,18 @@ type Entry = {
 
 const shipped: Entry[] = [
   {
+    date: 'Jul 24, 2026',
+    title: 'Forgot password + Google-signup detection',
+    body: 'Forgot your password? There\'s a page for that now, linked from the sign-in screen. If you originally signed up with Google, entering your email tells you to use the Google button instead of sending a reset link you can\'t use. Also: the sign-in page now remembers which method you used last time and highlights it.',
+    tag: 'ux',
+  },
+  {
+    date: 'Jul 24, 2026',
+    title: 'Google OAuth verification approved',
+    body: 'Same-day approval. The "Google hasn\'t verified this app" warning is gone. The consent screen shows CalConnect cleanly instead of the Supabase project subdomain. The 100-user cap is lifted.',
+    tag: 'launch',
+  },
+  {
     date: 'Jul 22, 2026',
     title: 'Per-calendar color + label customization',
     body: 'For each source calendar, pick your own color and label ("Personal commitment", "CXL workshop", "focus time", whatever you want). Default is still a gray "Busy" block. Show up on your other calendars in the way that actually makes sense to you, without ever leaking event details.',
@@ -99,11 +111,6 @@ const inFlight: Entry[] = [
     title: 'Sharper landing page + empty-state copy',
     body: 'Reframing around the outcome ("stop double-booking yourself") instead of the mechanism ("mirror your calendars"). Adding a founder story so people understand why we built this.',
     tag: 'ux',
-  },
-  {
-    title: 'Google OAuth verification submission',
-    body: 'Recording the demo video, then submitting for Google\'s verification review. Approval takes 4-6 weeks. Once approved, the "unverified app" screen goes away.',
-    tag: 'infra',
   },
 ]
 

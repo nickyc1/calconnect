@@ -48,12 +48,29 @@ export async function POST(req: NextRequest) {
     }
 
     if (user) {
-      const providers: string[] = (user.identities || []).map((i: any) => i.provider);
-      const hasGoogle = providers.includes('google');
-      const hasEmail = providers.includes('email');
+      // Supabase reports "how did this user sign up" in two places:
+      //   - user.app_metadata.provider  (the FIRST/primary auth method)
+      //   - user.app_metadata.providers (all providers used, sometimes)
+      //   - user.identities             (per-provider identity rows)
+      // For Google OAuth signups Supabase often auto-populates BOTH a
+      // 'google' identity AND an 'email' identity (because Google returns
+      // a verified email), which broke our earlier `has google AND not
+      // email` check. The reliable signal is the PRIMARY provider — if
+      // that's 'google', they signed up via Google and either never set
+      // a password or set one later (in which case reset still works).
+      // We use the primary-provider check to route Google-primary users
+      // to the sign-in-with-Google button.
+      const primaryProvider: string | undefined = user.app_metadata?.provider;
+      const identityProviders: string[] = (user.identities || []).map((i: any) => i.provider);
 
-      // Only-Google users can't reset a password they never set. Nudge them.
-      if (hasGoogle && !hasEmail) {
+      console.log('[forgot-password] user lookup', {
+        email: rawEmail,
+        primary_provider: primaryProvider,
+        providers_meta: user.app_metadata?.providers,
+        identity_providers: identityProviders,
+      });
+
+      if (primaryProvider === 'google') {
         return NextResponse.json({ result: 'use_google' });
       }
     }
