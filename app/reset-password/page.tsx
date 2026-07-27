@@ -30,52 +30,48 @@ export default function ResetPasswordPage() {
   )
 
   useEffect(() => {
-    // Supabase auto-exchanges the recovery token in the URL fragment. We
-    // listen for the PASSWORD_RECOVERY event (or any session that appears),
-    // AND we poll getSession() every 300ms up to 5 seconds. Whichever wins
-    // marks the page ready. If neither fires within 5s, we show
-    // "invalid_link".
+    // Manually parse the recovery tokens out of the URL fragment and pass
+    // them to setSession(). This bypasses any race conditions with
+    // Supabase's automatic detectSessionInUrl (which was flaky and caused
+    // false "Link expired" screens for perfectly valid tokens).
     //
-    // Earlier version used a single 400ms timeout which raced with Supabase's
-    // token exchange and false-triggered "Link expired" for valid links.
-    let done = false
-    let intervalId: ReturnType<typeof setInterval> | null = null
+    // A valid recovery URL looks like:
+    //   #access_token=<jwt>&refresh_token=<r>&type=recovery&...
+    if (typeof window === 'undefined') return
 
-    const markReady = () => {
-      if (done) return
-      done = true
-      if (intervalId) clearInterval(intervalId)
+    const hash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash
+    const params = new URLSearchParams(hash)
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+    const type = params.get('type')
+    const errorDescription = params.get('error_description')
+
+    if (errorDescription) {
+      // Supabase put an error in the hash — usually "Email link is invalid or has expired"
+      setState('invalid_link')
       setReady(true)
+      return
     }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
-        markReady()
-      }
-    })
+    if (!accessToken || !refreshToken || type !== 'recovery') {
+      // Nothing to work with — someone visited directly or the link was mangled.
+      setState('invalid_link')
+      setReady(true)
+      return
+    }
 
-    // Also poll — some browser/URL-fragment races fire the auth event before
-    // React attaches the listener. getSession catches those.
-    intervalId = setInterval(async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) markReady()
-    }, 300)
-
-    // Fallback: after 5s if we still have no session, declare the link expired.
-    const fallback = setTimeout(async () => {
-      if (done) return
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
+    supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }).then(({ error }) => {
+      if (error) {
+        console.error('reset-password setSession error:', error)
         setState('invalid_link')
       }
-      markReady()
-    }, 5000)
-
-    return () => {
-      clearTimeout(fallback)
-      if (intervalId) clearInterval(intervalId)
-      sub.subscription.unsubscribe()
-    }
+      setReady(true)
+    })
   }, [supabase])
 
   const submit = async (e: React.FormEvent) => {
