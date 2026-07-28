@@ -106,7 +106,12 @@ export async function POST(req: NextRequest) {
           : { price: priceId, quantity: 1 },
       ],
       success_url: `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/dashboard?checkout=cancelled`,
+      // Back from Stripe checkout lands on /onboarding (or /dashboard for
+      // add-on flows). New signups should see the plan picker again, not
+      // get dumped on a free-plan dashboard they didn't realize they had.
+      cancel_url: intent === 'extra_calendar'
+        ? `${origin}/dashboard?checkout=cancelled`
+        : `${origin}/onboarding?checkout=cancelled`,
       allow_promotion_codes: true,
       // Bind this session to the user, checked in the webhook before we grant entitlements.
       metadata: { user_id: user.id, intent },

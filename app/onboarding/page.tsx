@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 /**
  * /onboarding
@@ -12,6 +12,10 @@ import { useRouter } from 'next/navigation'
  * here to select Basic or Pro (which starts a 7-day trial with card required)
  * OR to redeem an AppSumo code. Existing users who already have a paid plan
  * are bounced straight to /dashboard so they never see this page twice.
+ *
+ * If Stripe checkout was cancelled (user hit back from Stripe), we detect
+ * ?checkout=cancelled and show a friendly banner so they know they can pick
+ * a different plan without being dumped on the free-plan dashboard.
  */
 
 const CSS = `
@@ -21,7 +25,13 @@ const CSS = `
 .ob-brand em { font-style: italic; color: #de5b28; }
 .ob-title { font-family: 'Iowan Old Style', Georgia, serif; font-size: 36px; line-height: 1.1; letter-spacing: -0.02em; color: #14140f; margin: 0 0 12px; font-weight: 400; }
 .ob-title em { font-style: italic; color: #de5b28; }
-.ob-sub { font-size: 16px; color: #4e4d47; line-height: 1.5; margin: 0 0 36px; max-width: 480px; }
+.ob-sub { font-size: 16px; color: #4e4d47; line-height: 1.5; margin: 0 0 28px; max-width: 480px; }
+.ob-toggle { display: inline-flex; padding: 4px; background: #efece2; border-radius: 999px; margin-bottom: 24px; font-family: inherit; }
+.ob-toggle button { background: transparent; border: none; padding: 8px 18px; font-size: 14px; font-weight: 500; color: #4e4d47; cursor: pointer; border-radius: 999px; font-family: inherit; display: inline-flex; align-items: center; gap: 8px; transition: background 150ms, color 150ms; }
+.ob-toggle button.active { background: #14140f; color: #f7f5ee; }
+.ob-toggle-save { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(30,95,34,0.15); color: #1e5f22; font-weight: 600; letter-spacing: 0.03em; }
+.ob-toggle button.active .ob-toggle-save { background: rgba(247,245,238,0.2); color: #a7d3aa; }
+.ob-cancel-banner { padding: 12px 16px; background: #fff8e1; border: 1px solid #f0d174; border-radius: 10px; margin-bottom: 20px; color: #5c4a10; font-size: 14px; line-height: 1.5; }
 .ob-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
 .ob-plan { text-align: left; padding: 28px 24px; border: 1.5px solid #d5d3ce; border-radius: 14px; background: white; cursor: pointer; transition: all 150ms ease; font-family: inherit; }
 .ob-plan:hover:not(:disabled) { border-color: #14140f; box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
@@ -31,6 +41,7 @@ const CSS = `
 .ob-plan-name { font-family: inherit; font-size: 20px; font-weight: 600; color: #14140f; margin-bottom: 4px; }
 .ob-plan-price { font-family: 'Iowan Old Style', Georgia, serif; font-size: 32px; color: #14140f; letter-spacing: -0.01em; margin-bottom: 4px; }
 .ob-plan-price small { font-family: -apple-system, sans-serif; font-size: 15px; color: #4e4d47; font-weight: 400; }
+.ob-plan-savings { font-size: 12px; color: #1e5f22; font-weight: 500; margin-bottom: 2px; }
 .ob-plan-what { font-size: 14px; color: #4e4d47; margin-bottom: 16px; }
 .ob-plan-trial { font-size: 13px; color: #1e5f22; font-weight: 500; margin-top: 12px; }
 .ob-list { list-style: none; padding: 0; margin: 12px 0 0; }
@@ -49,11 +60,23 @@ const CSS = `
 `
 
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingContent />
+    </Suspense>
+  )
+}
+
+function OnboardingContent() {
   const [checking, setChecking] = useState(true)
   const [userEmail, setUserEmail] = useState('')
   const [loadingIntent, setLoadingIntent] = useState<string>('')
   const [error, setError] = useState('')
+  // Yearly by default — 17% discount, better LTV, industry norm.
+  const [cadence, setCadence] = useState<'monthly' | 'yearly'>('yearly')
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const wasCancelled = searchParams.get('checkout') === 'cancelled'
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -83,7 +106,9 @@ export default function OnboardingPage() {
     })()
   }, [])
 
-  const startTrial = async (intent: 'basic_monthly' | 'pro_monthly') => {
+  const startTrial = async (
+    intent: 'basic_monthly' | 'basic_yearly' | 'pro_monthly' | 'pro_yearly',
+  ) => {
     setLoadingIntent(intent)
     setError('')
     try {
@@ -121,6 +146,14 @@ export default function OnboardingPage() {
     )
   }
 
+  // Price display per cadence. Yearly saves ~17% vs paying monthly.
+  const basicPrice = cadence === 'yearly'
+    ? { amount: '$40', unit: '/yr after trial', savings: 'Save $8 vs monthly', intent: 'basic_yearly' as const }
+    : { amount: '$4',  unit: '/mo after trial', savings: '',                    intent: 'basic_monthly' as const }
+  const proPrice = cadence === 'yearly'
+    ? { amount: '$100', unit: '/yr after trial', savings: 'Save $20 vs monthly', intent: 'pro_yearly' as const }
+    : { amount: '$10',  unit: '/mo after trial', savings: '',                     intent: 'pro_monthly' as const }
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
@@ -131,14 +164,44 @@ export default function OnboardingPage() {
           <h1 className="ob-title">Almost there — pick your <em>plan.</em></h1>
           <p className="ob-sub">Start a 7-day free trial. $0 due today, cancel any time. We&apos;ll charge your card on day 7 unless you cancel.</p>
 
+          {wasCancelled && (
+            <div className="ob-cancel-banner">
+              No worries — pick a different plan below when you&apos;re ready. We didn&apos;t charge anything.
+            </div>
+          )}
+
+          <div className="ob-toggle" role="tablist" aria-label="Billing cadence">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={cadence === 'monthly'}
+              className={cadence === 'monthly' ? 'active' : ''}
+              onClick={() => setCadence('monthly')}
+              disabled={!!loadingIntent}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={cadence === 'yearly'}
+              className={cadence === 'yearly' ? 'active' : ''}
+              onClick={() => setCadence('yearly')}
+              disabled={!!loadingIntent}
+            >
+              Yearly <span className="ob-toggle-save">Save 17%</span>
+            </button>
+          </div>
+
           <div className="ob-plans">
             <button
               className="ob-plan"
-              onClick={() => startTrial('basic_monthly')}
+              onClick={() => startTrial(basicPrice.intent)}
               disabled={!!loadingIntent}
             >
               <div className="ob-plan-name">Basic</div>
-              <div className="ob-plan-price">$4<small>/mo after trial</small></div>
+              <div className="ob-plan-price">{basicPrice.amount}<small>{basicPrice.unit}</small></div>
+              {basicPrice.savings && <div className="ob-plan-savings">{basicPrice.savings}</div>}
               <div className="ob-plan-what">3 connected Google Calendars</div>
               <ul className="ob-list">
                 <li>Real-time push sync</li>
@@ -150,12 +213,13 @@ export default function OnboardingPage() {
 
             <button
               className="ob-plan ob-plan-featured"
-              onClick={() => startTrial('pro_monthly')}
+              onClick={() => startTrial(proPrice.intent)}
               disabled={!!loadingIntent}
             >
               <div className="ob-plan-badge">Most popular</div>
               <div className="ob-plan-name">Pro</div>
-              <div className="ob-plan-price">$10<small>/mo after trial</small></div>
+              <div className="ob-plan-price">{proPrice.amount}<small>{proPrice.unit}</small></div>
+              {proPrice.savings && <div className="ob-plan-savings">{proPrice.savings}</div>}
               <div className="ob-plan-what">10 connected Google Calendars</div>
               <ul className="ob-list">
                 <li>Everything in Basic</li>
