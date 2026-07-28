@@ -140,8 +140,21 @@ export async function GET(request: NextRequest) {
 
     if (insertError) {
       console.error('Error storing account:', insertError);
+      // Detect common failure modes and give the user a clear reason on the
+      // dashboard error banner instead of a generic "store_failed."
+      const code = (insertError as any)?.code;
+      const message = ((insertError as any)?.message || '').toLowerCase();
+      let reason = 'store_failed';
+      if (code === '23505' || message.includes('duplicate') || message.includes('unique')) {
+        // Unique constraint. In practice this means the same google_email is
+        // already connected to this user (after migration 017 the constraint
+        // is scoped per user_id).
+        reason = 'already_connected';
+      } else if (code === '23503' || message.includes('foreign')) {
+        reason = 'user_not_found';
+      }
       return NextResponse.redirect(
-        new URL('/dashboard?error=store_failed', request.url)
+        new URL(`/dashboard?error=${reason}`, request.url),
       );
     }
 

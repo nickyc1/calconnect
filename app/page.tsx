@@ -217,7 +217,6 @@ export default async function Home() {
         <div className="cc-v5-container">
           <div className="cc-v5-hero">
             <div>
-              <div className="cc-v5-h-status">Live. Public beta.</div>
               <h1>Google Calendars, <em>synchronized.</em></h1>
               <p className="cc-v5-lede">One place blocks time on the others. Real-time. Privacy-preserving. Zero manual work after 90 seconds of setup.</p>
               <div className="cc-v5-h-cta">
