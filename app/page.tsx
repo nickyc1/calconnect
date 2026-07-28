@@ -372,20 +372,21 @@ export default async function Home() {
           <div className="cc-v5-container">
             <div className="cc-v5-privacy-hero">
               <div className="cc-v5-p-copy">
-                <h2 style={{ color: 'white' }}>The mirror only says <em>&quot;Busy.&quot;</em></h2>
-                <p>Nothing else from your source events ever touches your other calendars. No titles. No attendees. No links. No context. Just an opaque time block your scheduling tool can see.</p>
+                <h2 style={{ color: 'white' }}>Your <em>label.</em> Your <em>color.</em> Still 100% private.</h2>
+                <p>Pick a custom label for each source calendar (&quot;Busy&quot; is just the default, call them &quot;Personal,&quot; &quot;Focus,&quot; &quot;Kids,&quot; whatever fits) and a color so you know at a glance which calendar a block came from. Event details never leave the source calendar.</p>
                 <p style={{ marginTop: 16 }} className="cc-v5-text-mute">Your work never sees the therapy. Your clients never see the school pickup. Your agency never sees the board meeting.</p>
               </div>
               <div className="cc-v5-p-list-dark">
                 <h4>Mirrored across calendars</h4>
                 <ul>
-                  <li>Word &quot;Busy&quot;</li>
+                  <li>Your custom label</li>
+                  <li>Your chosen color</li>
                   <li>Start time</li>
                   <li>End time</li>
                 </ul>
                 <h4>Never mirrored</h4>
                 <ul className="cc-v5-neg">
-                  <li>Event title</li>
+                  <li>Real event title</li>
                   <li>Attendees</li>
                   <li>Description</li>
                   <li>Meeting links</li>
