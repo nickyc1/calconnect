@@ -4,6 +4,74 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useSearchParams } from 'next/navigation'
 
+/**
+ * Tiny CSS-drawn calendar icon used in the "How CalConnect works" 3-step
+ * explainer. topColor is the colored strip along the top; a small orange
+ * checkmark badge appears in the bottom-right when checked (used to
+ * represent a Source calendar).
+ */
+function CalIcon({ topColor, checked = false }: { topColor: string; checked?: boolean }) {
+  return (
+    <span style={{
+      position: 'relative',
+      display: 'inline-block',
+      width: 24, height: 26,
+      border: '1.5px solid #14140f',
+      borderRadius: 3,
+      background: 'white',
+    }}>
+      <span style={{
+        position: 'absolute',
+        top: -3, left: 0, right: 0,
+        height: 6,
+        background: topColor,
+        borderRadius: '3px 3px 0 0',
+      }} />
+      {checked && (
+        <span style={{
+          position: 'absolute',
+          bottom: -2, right: -6,
+          width: 14, height: 14,
+          background: '#de5b28',
+          borderRadius: '50%',
+          color: 'white',
+          fontSize: 9,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 700,
+        }}>✓</span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * One row of the step-3 visual — a colored strip, a calendar label, and a
+ * tag block (either the source event title or the mirrored "Busy" label).
+ */
+function MiniRow({
+  strip, label, tag, tagBg, tagColor, tagWeight = 500, italic = false,
+}: {
+  strip: string; label: string; tag: string; tagBg: string; tagColor: string;
+  tagWeight?: number; italic?: boolean;
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 4,
+      background: 'white', border: '1px solid #ede9dc', borderRadius: 4,
+      padding: '2px 6px', fontSize: 9,
+    }}>
+      <span style={{ width: 3, height: 12, borderRadius: 2, background: strip }} />
+      <span style={{ color: '#4a4a45' }}>{label}</span>
+      <span style={{
+        background: tagBg, color: tagColor,
+        padding: '0 4px', borderRadius: 3,
+        fontWeight: tagWeight,
+        fontStyle: italic ? 'italic' : 'normal',
+      }}>{tag}</span>
+    </div>
+  )
+}
+
 interface Account {
   id: string
   account_id: string
@@ -362,6 +430,23 @@ export default function DashboardPage() {
   }
 
   const [portalLoading, setPortalLoading] = useState(false)
+  // "How CalConnect works" explainer is shown by default; user can dismiss.
+  // Persisted via a cc_hide_explainer=1 cookie so it stays hidden across visits.
+  const [hideExplainer, setHideExplainer] = useState(false)
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (document.cookie.match(/(?:^|;\s*)cc_hide_explainer=1/)) {
+      setHideExplainer(true)
+    }
+  }, [])
+  const dismissExplainer = () => {
+    setHideExplainer(true)
+    document.cookie = `cc_hide_explainer=1; max-age=${60 * 60 * 24 * 365}; path=/; SameSite=Lax`
+  }
+  const restoreExplainer = () => {
+    setHideExplainer(false)
+    document.cookie = `cc_hide_explainer=0; max-age=0; path=/; SameSite=Lax`
+  }
   const openBillingPortal = async () => {
     setPortalLoading(true)
     try {
@@ -588,7 +673,7 @@ export default function DashboardPage() {
                       Source
                       <span className="cc-tooltip">
                         <span className="cc-tooltip-trigger">?</span>
-                        <span className="cc-tooltip-bubble">Events here show as &quot;Busy&quot; on your other calendars.</span>
+                        <span className="cc-tooltip-bubble">Any event I add here will appear as Busy on my other calendars.</span>
                       </span>
                     </span>
                   </label>
@@ -802,25 +887,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* How it works */}
-      <div style={{
-        background: 'white',
-        padding: '1.5rem',
-        borderRadius: '8px',
-        fontSize: '0.9rem',
-        color: '#666',
-        border: '1px solid #e5e7eb'
-      }}>
-        <h4 style={{ marginTop: 0, color: '#333' }}>How it works</h4>
-        <ol style={{ paddingLeft: '1.25rem' }}>
-          <li>Connect 2 or more Google Calendar accounts</li>
-          <li>Select which accounts are "source" calendars</li>
-          <li>Enable mirroring</li>
-          <li>Events in source calendars automatically appear as "Busy" in all other calendars</li>
-          <li>Deletions and updates sync automatically</li>
-        </ol>
-      </div>
-
       {/* Danger Zone */}
       <div style={{
         marginTop: '2rem',
@@ -868,6 +934,129 @@ export default function DashboardPage() {
           <span style={{ color: '#aaa' }}> — keeps your account, stops future charges.</span>
         </div>
       </div>
+
+      {/* How CalConnect works — always-on 3-step explainer at the bottom.
+          Users can hide it via a cookie; a small "Show" button appears if hidden. */}
+      {!hideExplainer ? (
+        <div style={{
+          marginTop: '2rem',
+          background: 'white',
+          padding: '1.5rem',
+          borderRadius: '8px',
+          border: '1px solid #ede9dc',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>
+              How <span style={{ color: '#de5b28', fontWeight: 700 }}>CalConnect</span> works
+            </div>
+            <button
+              onClick={dismissExplainer}
+              style={{ background: 'transparent', border: 'none', color: '#8a887f', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline', padding: '4px 8px' }}
+            >
+              Hide
+            </button>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '1rem',
+          }}>
+            {[
+              {
+                num: 1,
+                title: 'Connect your Google Calendars',
+                body: 'Sign in with each Google account. Two or more, however many you juggle.',
+                visual: (
+                  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                    <CalIcon topColor="#5484ed" />
+                    <CalIcon topColor="#51b749" />
+                    <CalIcon topColor="#de5b28" />
+                  </div>
+                ),
+              },
+              {
+                num: 2,
+                title: 'Pick your Source calendar(s)',
+                body: 'A Source is a calendar whose events should show as Busy on your other calendars. Toggle at least one.',
+                visual: (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+                    <CalIcon topColor="#de5b28" checked />
+                    <span style={{ color: '#de5b28', fontSize: 14 }}>→</span>
+                    <CalIcon topColor="#5484ed" />
+                    <CalIcon topColor="#51b749" />
+                  </div>
+                ),
+              },
+              {
+                num: 3,
+                title: 'Events auto-mirror as "Busy"',
+                body: 'Add an event to a Source calendar → it appears as Busy on the others in seconds. Deletions and updates sync too.',
+                visual: (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                    <MiniRow strip="#de5b28" label="Personal" tag="Doctor 2p" tagBg="#fee4d0" tagColor="#a04e00" tagWeight={600} />
+                    <span style={{ color: '#de5b28', fontSize: 10, lineHeight: 1 }}>↓</span>
+                    <MiniRow strip="#5484ed" label="Work" tag="Busy" tagBg="#efeadb" tagColor="#6a6659" italic />
+                    <MiniRow strip="#51b749" label="Agency" tag="Busy" tagBg="#efeadb" tagColor="#6a6659" italic />
+                  </div>
+                ),
+              },
+            ].map((step) => (
+              <div key={step.num} style={{
+                background: '#faf9f4',
+                border: '1px solid #ede9dc',
+                borderRadius: '10px',
+                padding: '14px 14px 12px',
+                position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute', top: 12, right: 14,
+                  width: 22, height: 22, background: '#14140f', color: '#f7f5ee',
+                  borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 600, fontFamily: 'ui-monospace, monospace',
+                }}>{step.num}</div>
+                <div style={{ height: 68, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {step.visual}
+                </div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a1a1a', marginBottom: 4, paddingRight: 26, lineHeight: 1.35 }}>
+                  {step.title}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#4a4a45', lineHeight: 1.5 }}>
+                  {step.body}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            marginTop: '1rem',
+            paddingTop: 12,
+            borderTop: '1px dashed #ede9dc',
+            fontSize: '0.8rem',
+            color: '#4a4a45',
+            textAlign: 'center',
+          }}>
+            <strong style={{ color: '#14140f' }}>Fully private.</strong> Event titles, attendees, and notes never leave the source calendar — only the time window and your custom label.
+          </div>
+        </div>
+      ) : (
+        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+          <button
+            onClick={restoreExplainer}
+            style={{
+              background: 'transparent',
+              border: '1px dashed #d5d3ce',
+              color: '#8a887f',
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+            }}
+          >
+            Show &quot;How CalConnect works&quot;
+          </button>
+        </div>
+      )}
 
       {showUpgrade && (
         <div
