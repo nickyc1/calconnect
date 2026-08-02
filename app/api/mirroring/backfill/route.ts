@@ -301,19 +301,38 @@ export async function POST(req: NextRequest) {
   }
 
   // Update state. If no nextPageToken, we're done.
+  // CRITICAL: only write back if status is STILL 'running'. A tick call can
+  // take 5-10s to process a chunk; during that window the user may have
+  // clicked Cancel, which flipped the status to 'canceling'. Without this
+  // guard, the tick's final update would overwrite 'canceling' with 'running'
+  // and the row would flicker back and forth until the user gave up.
   const newProgress = acctRow.backfill_progress + processed;
   const done = !nextPageToken;
-  await (supabaseAdmin as any)
+  const { data: updated } = await (supabaseAdmin as any)
     .from('user_accounts')
     .update({
       backfill_status: done ? 'complete' : 'running',
       backfill_progress: newProgress,
       backfill_cursor: nextPageToken || null,
-      // Total is unknown until we've seen the last page; leave null while running.
       backfill_total: done ? newProgress : null,
     })
     .eq('account_id', accountId)
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('backfill_status', 'running')
+    .select('backfill_status, backfill_progress, backfill_total')
+    .maybeSingle();
+
+  // If the row didn't update (status changed under us), return the CURRENT
+  // truth so the client stops flipping.
+  if (!updated) {
+    const fresh = await getSourceAccount(user.id, accountId) as any;
+    return NextResponse.json({
+      ok: true,
+      status: fresh?.backfill_status,
+      progress: fresh?.backfill_progress,
+      total: fresh?.backfill_total,
+    });
+  }
 
   return NextResponse.json({
     ok: true,
