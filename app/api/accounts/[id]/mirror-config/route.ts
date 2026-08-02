@@ -22,6 +22,27 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 const VALID_COLOR_IDS = new Set(['1','2','3','4','5','6','7','8','9','10','11']);
 const MAX_LABEL_LENGTH = 60;
+const VALID_DAYS = new Set([0, 1, 2, 3, 4, 5, 6]);
+
+/** Pro-only features accept null (turn off) or a validated object. */
+function validateMirrorWindow(raw: any): { ok: true; value: any } | { ok: false; error: string } {
+  if (raw === null) return { ok: true, value: null };
+  if (typeof raw !== 'object') return { ok: false, error: 'mirrorWindow must be null or an object.' };
+  const days = raw.days;
+  if (!Array.isArray(days) || days.length === 0 || !days.every((d: any) => Number.isInteger(d) && VALID_DAYS.has(d))) {
+    return { ok: false, error: 'mirrorWindow.days must be a non-empty array of integers 0-6.' };
+  }
+  const startMin = Number.isInteger(raw.start_min) ? raw.start_min : 0;
+  const endMin = Number.isInteger(raw.end_min) ? raw.end_min : 1440;
+  if (startMin < 0 || startMin > 1440 || endMin < 0 || endMin > 1440 || endMin <= startMin) {
+    return { ok: false, error: 'mirrorWindow start/end must be 0-1440 with end > start.' };
+  }
+  const tz = typeof raw.tz === 'string' && raw.tz.length < 64 ? raw.tz : undefined;
+  return {
+    ok: true,
+    value: { days: [...new Set(days)].sort(), start_min: startMin, end_min: endMin, ...(tz ? { tz } : {}) },
+  };
+}
 
 export async function POST(
   request: NextRequest,
@@ -36,8 +57,9 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const rawColor = body?.mirrorColorId;
     const rawLabel = body?.mirrorLabel;
+    const rawWindow = body?.mirrorWindow;
 
-    const patch: Record<string, string> = {};
+    const patch: Record<string, any> = {};
 
     if (rawColor !== undefined) {
       if (typeof rawColor !== 'string' || !VALID_COLOR_IDS.has(rawColor)) {
@@ -63,6 +85,29 @@ export async function POST(
       patch.mirror_label = trimmed;
     }
 
+    if (rawWindow !== undefined) {
+      // Pro-gate: only Pro subscribers can set a mirror window.
+      // Clearing the window (setting to null) is allowed for any plan so
+      // downgrades don't leave orphan windows filtering their events.
+      if (rawWindow !== null) {
+        const { data: billing } = await (supabaseAdmin as any)
+          .from('user_billing')
+          .select('plan')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        const plan = (billing as any)?.plan;
+        if (plan !== 'pro') {
+          return NextResponse.json(
+            { error: 'Mirror windows are a Pro feature. Upgrade to enable time/day filters.' },
+            { status: 402 },
+          );
+        }
+      }
+      const check = validateMirrorWindow(rawWindow);
+      if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+      patch.mirror_window = check.value;
+    }
+
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'No changes supplied.' }, { status: 400 });
     }
@@ -74,7 +119,7 @@ export async function POST(
       .update(patch)
       .eq('account_id', accountId)
       .eq('user_id', user.id)
-      .select('account_id, mirror_color_id, mirror_label')
+      .select('account_id, mirror_color_id, mirror_label, mirror_window')
       .maybeSingle();
 
     if (error) {
@@ -89,6 +134,7 @@ export async function POST(
       accountId: data.account_id,
       mirrorColorId: data.mirror_color_id,
       mirrorLabel: data.mirror_label,
+      mirrorWindow: data.mirror_window,
     });
   } catch (err: any) {
     console.error('mirror-config error:', err);

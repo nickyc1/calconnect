@@ -229,6 +229,37 @@ class GoogleCalendarService {
 
     return { events: allEvents, nextSyncToken };
   }
+
+  /**
+   * Paginated event fetch for the backfill flow. Returns ONE page of events
+   * (up to maxResults) and a pageToken to continue. Recurring events are
+   * expanded to individual instances via singleEvents=true.
+   */
+  async listEventsForBackfill(
+    auth: OAuth2Client,
+    calendarId: string,
+    timeMinISO: string,
+    timeMaxISO: string,
+    maxResults: number,
+    pageToken?: string,
+  ): Promise<{ events: GoogleCalendarEvent[]; nextPageToken?: string }> {
+    const calendar = this.getCalendar(auth);
+    const params: any = {
+      calendarId,
+      maxResults,
+      singleEvents: true,       // Expand recurring events into per-instance rows
+      showDeleted: false,       // Skip cancelled events during backfill
+      orderBy: 'startTime',
+      timeMin: timeMinISO,
+      timeMax: timeMaxISO,
+    };
+    if (pageToken) params.pageToken = pageToken;
+    const { data } = await calendar.events.list(params);
+    return {
+      events: (data.items as unknown as GoogleCalendarEvent[]) || [],
+      nextPageToken: data.nextPageToken || undefined,
+    };
+  }
 }
 
 export const googleCalendar = new GoogleCalendarService();

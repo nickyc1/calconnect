@@ -72,6 +72,13 @@ function MiniRow({
   )
 }
 
+interface MirrorWindow {
+  days: number[]
+  start_min: number
+  end_min: number
+  tz?: string
+}
+
 interface Account {
   id: string
   account_id: string
@@ -82,6 +89,11 @@ interface Account {
   needs_reauth?: boolean
   mirror_color_id?: string
   mirror_label?: string
+  mirror_window?: MirrorWindow | null
+  mirror_existing_enabled?: boolean
+  backfill_status?: 'idle' | 'running' | 'complete' | 'failed' | 'canceled'
+  backfill_progress?: number
+  backfill_total?: number | null
 }
 
 // Google Calendar event colors — hex approximations so we can render a picker.
@@ -248,7 +260,7 @@ export default function DashboardPage() {
 
   const saveMirrorConfig = async (
     accountId: string,
-    patch: { mirrorColorId?: string; mirrorLabel?: string }
+    patch: { mirrorColorId?: string; mirrorLabel?: string; mirrorWindow?: MirrorWindow | null }
   ) => {
     setMirrorSaving(accountId)
     try {
@@ -267,7 +279,12 @@ export default function DashboardPage() {
       setAccounts((prev) =>
         prev.map((a) =>
           a.account_id === accountId
-            ? { ...a, mirror_color_id: data.mirrorColorId, mirror_label: data.mirrorLabel }
+            ? {
+                ...a,
+                mirror_color_id: data.mirrorColorId ?? a.mirror_color_id,
+                mirror_label: data.mirrorLabel ?? a.mirror_label,
+                mirror_window: 'mirrorWindow' in data ? data.mirrorWindow : a.mirror_window,
+              }
             : a
         )
       )
@@ -282,6 +299,61 @@ export default function DashboardPage() {
       setMirrorSaving(null)
     }
   }
+
+  // ==== Backfill (Pro): mirror existing events on the source calendar ====
+  const toggleBackfill = async (accountId: string, enable: boolean) => {
+    // Optimistic UI: reflect toggle instantly
+    setAccounts((prev) => prev.map((a) => a.account_id === accountId
+      ? { ...a, mirror_existing_enabled: enable, backfill_status: enable ? 'running' : 'canceled', backfill_progress: 0, backfill_total: null }
+      : a))
+    try {
+      const res = await fetch('/api/mirroring/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, action: enable ? 'enable' : 'disable' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setStatus(data?.error || 'Could not update backfill.')
+        // Revert optimistic
+        setAccounts((prev) => prev.map((a) => a.account_id === accountId
+          ? { ...a, mirror_existing_enabled: !enable, backfill_status: 'idle' }
+          : a))
+        return
+      }
+      setAccounts((prev) => prev.map((a) => a.account_id === accountId
+        ? { ...a, backfill_status: data.status, backfill_progress: data.progress, backfill_total: data.total ?? null }
+        : a))
+    } catch (err: any) {
+      setStatus(err?.message || 'Network error updating backfill.')
+    }
+  }
+
+  // Poll running backfills every 2.5s. Each tick triggers the next chunk.
+  useEffect(() => {
+    const running = accounts.filter((a) => a.backfill_status === 'running')
+    if (running.length === 0) return
+    const timer = setTimeout(async () => {
+      for (const acct of running) {
+        try {
+          const res = await fetch('/api/mirroring/backfill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: acct.account_id, action: 'tick' }),
+          })
+          const data = await res.json().catch(() => ({}))
+          if (res.ok) {
+            setAccounts((prev) => prev.map((a) => a.account_id === acct.account_id
+              ? { ...a, backfill_status: data.status, backfill_progress: data.progress, backfill_total: data.total ?? null }
+              : a))
+          }
+        } catch (err) {
+          console.warn('Backfill poll failed:', err)
+        }
+      }
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [accounts])
 
   const toggleSourceAccount = async (accountId: string, isSource: boolean) => {
     setActionLoading(true)
@@ -704,15 +776,21 @@ export default function DashboardPage() {
                     ? labelDrafts[account.account_id]
                     : (account.mirror_label || 'Busy')
                 const savingThis = mirrorSaving === account.account_id
+                const isPro = billing?.plan === 'pro'
+                const winActive = !!(account.mirror_window && account.mirror_window.days?.length)
+                const win = account.mirror_window || { days: [1,2,3,4,5], start_min: 540, end_min: 1020 }
+                const backfillStatus = account.backfill_status || 'idle'
+                const backfillRunning = backfillStatus === 'running'
+                const backfillOn = !!account.mirror_existing_enabled
                 return (
                   <div style={{
                     display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: '0.75rem',
+                    flexDirection: 'column',
+                    gap: '0.6rem',
                     paddingTop: '0.5rem',
                     borderTop: '1px dashed #e5e5e5',
                   }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
                     <span style={{ fontSize: '0.8rem', color: '#666' }}>
                       Mirrored blocks show as
                     </span>
@@ -780,6 +858,113 @@ export default function DashboardPage() {
                     }}>
                       {savingThis ? 'Saving…' : (mirrorSaved === account.account_id ? 'Saved' : '')}
                     </span>
+                    </div>
+
+                    {/* Pro-only settings: mirror window + backfill */}
+                    {isPro ? (
+                      <>
+                        {/* Row: Time/day window */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.6rem', fontSize: '0.8rem' }}>
+                          <span style={{ color: '#666' }}>Mirror during:</span>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={winActive}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  saveMirrorConfig(account.account_id, { mirrorWindow: { days: [1,2,3,4,5], start_min: 540, end_min: 1020 } })
+                                } else {
+                                  saveMirrorConfig(account.account_id, { mirrorWindow: null })
+                                }
+                              }}
+                            />
+                            <span>Only certain days/times</span>
+                          </label>
+                          {winActive && (
+                            <>
+                              <div style={{ display: 'inline-flex', gap: 3 }}>
+                                {['S','M','T','W','T','F','S'].map((letter, i) => {
+                                  const on = win.days.includes(i)
+                                  return (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      onClick={() => {
+                                        const newDays = on ? win.days.filter(d => d !== i) : [...win.days, i]
+                                        if (newDays.length === 0) return
+                                        saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, days: newDays } })
+                                      }}
+                                      style={{
+                                        width: 26, height: 26, borderRadius: '50%',
+                                        border: '1px solid ' + (on ? '#14140f' : '#d5d3ce'),
+                                        background: on ? '#14140f' : 'white',
+                                        color: on ? '#f7f5ee' : '#666',
+                                        fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: 0,
+                                      }}
+                                    >{letter}</button>
+                                  )
+                                })}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, days: [1,2,3,4,5] } })}
+                                style={{ background: 'transparent', border: 'none', color: '#de5b28', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline', padding: 0 }}
+                              >Weekdays</button>
+                              <input
+                                type="time"
+                                value={`${String(Math.floor(win.start_min / 60)).padStart(2,'0')}:${String(win.start_min % 60).padStart(2,'0')}`}
+                                onChange={(e) => {
+                                  const [h,m] = e.target.value.split(':').map(Number)
+                                  saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, start_min: h * 60 + m } })
+                                }}
+                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem' }}
+                              />
+                              <span style={{ color: '#8a887f' }}>to</span>
+                              <input
+                                type="time"
+                                value={`${String(Math.floor(win.end_min / 60)).padStart(2,'0')}:${String(win.end_min % 60).padStart(2,'0')}`}
+                                onChange={(e) => {
+                                  const [h,m] = e.target.value.split(':').map(Number)
+                                  saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, end_min: h * 60 + m } })
+                                }}
+                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem' }}
+                              />
+                            </>
+                          )}
+                        </div>
+
+                        {/* Row: Backfill existing events */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.6rem', fontSize: '0.8rem' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={backfillOn || backfillRunning}
+                              onChange={(e) => toggleBackfill(account.account_id, e.target.checked)}
+                              disabled={backfillRunning}
+                            />
+                            <span style={{ color: '#666' }}>Mirror existing events (next 5 years)</span>
+                          </label>
+                          {backfillRunning && (
+                            <span style={{ color: '#1e5f22', fontWeight: 500 }}>
+                              Mirroring {account.backfill_progress || 0}{account.backfill_total ? ` of ${account.backfill_total}` : ''} events…
+                            </span>
+                          )}
+                          {backfillStatus === 'complete' && backfillOn && (
+                            <span style={{ color: '#1e5f22', fontWeight: 500 }}>
+                              ✓ {account.backfill_progress || 0} events mirrored
+                            </span>
+                          )}
+                          {backfillStatus === 'failed' && (
+                            <span style={{ color: '#a11616' }}>Backfill failed — try again</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: '0.75rem', color: '#8a887f' }}>
+                        <a href="#" onClick={(e) => { e.preventDefault(); setShowUpgrade(true) }} style={{ color: '#de5b28', textDecoration: 'underline' }}>Upgrade to Pro</a>
+                        {' '}for time/day windows and backfilling existing events.
+                      </div>
+                    )}
                   </div>
                 )
               })()}

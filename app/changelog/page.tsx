@@ -12,6 +12,48 @@ type Entry = {
 
 const shipped: Entry[] = [
   {
+    date: 'Jul 28, 2026',
+    title: 'Time & day mirror windows (Pro)',
+    body: 'For Pro subscribers: pick which days and hours a source calendar should mirror. Set your work calendar to only mirror 9-5 weekdays, or your personal calendar to only mirror evenings and weekends. Events outside the window are ignored. Requested by our first AppSumo reviewer.',
+    tag: 'ux',
+  },
+  {
+    date: 'Jul 28, 2026',
+    title: 'Mirror existing events with backfill (Pro)',
+    body: 'For Pro subscribers: toggle "Mirror existing events" on a source calendar and CalConnect pulls the next 5 years of events from that calendar and mirrors them all as Busy blocks on your other calendars. Progress bar shows real-time. Toggle off cleanly removes the backfilled mirrors (never touches your real events). Also requested by our first AppSumo reviewer.',
+    tag: 'ux',
+  },
+  {
+    date: 'Jul 28, 2026',
+    title: 'Social share preview',
+    body: 'The site now has a proper OG image so pasting calconnect.io into LinkedIn, Twitter, or Slack shows the CalConnect wordmark and a calendar visual instead of a generic gray placeholder.',
+    tag: 'infra',
+  },
+  {
+    date: 'Jul 28, 2026',
+    title: 'Same Google account can connect to multiple CalConnect users',
+    body: 'Fixed a unique-constraint quirk that prevented the same Google account from being connected to more than one CalConnect user across the whole system. Now each user can independently connect any of their Google accounts.',
+    tag: 'infra',
+  },
+  {
+    date: 'Jul 28, 2026',
+    title: 'Onboarding cleanup — monthly/yearly toggle + Stripe back button',
+    body: 'The plan picker now has a monthly/yearly toggle (yearly by default, 17% savings). Hitting back from Stripe checkout now lands on the plan picker instead of a free-plan dashboard. Also fixed swapped Stripe price IDs that were sending monthly buyers to the yearly price.',
+    tag: 'billing',
+  },
+  {
+    date: 'Jul 28, 2026',
+    title: 'Dashboard 3-step explainer with hover-only Source tooltip',
+    body: 'Every dashboard now has a hide-able "How CalConnect works" strip at the bottom that walks through the setup in 3 visual steps. The Source label\'s explanation is back to a hover tooltip so it doesn\'t take up permanent space on each row.',
+    tag: 'ux',
+  },
+  {
+    date: 'Jul 28, 2026',
+    title: 'Encryption Day 2 — backfilled all existing tokens',
+    body: 'Every existing Google OAuth refresh token in the database is now encrypted at rest with AES-256-GCM. Read path prefers encrypted with plaintext fallback until Day 3 (plaintext column drop) which is queued for tomorrow.',
+    tag: 'security',
+  },
+  {
     date: 'Jul 24, 2026',
     title: 'Forgot password + Google-signup detection',
     body: 'Forgot your password? There\'s a page for that now, linked from the sign-in screen. If you originally signed up with Google, entering your email tells you to use the Google button instead of sending a reset link you can\'t use. Also: the sign-in page now remembers which method you used last time and highlights it.',

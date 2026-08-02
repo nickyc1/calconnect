@@ -9,6 +9,7 @@ import {
   expandRecurringEvent,
   generateInstanceId,
 } from './recurring-events';
+import { eventOverlapsWindow, type MirrorWindow } from './mirror-window';
 
 export class CalendarSyncService {
   /**
@@ -20,7 +21,8 @@ export class CalendarSyncService {
     sourceAccountId: string,
     sourceCalendarId: string,
     sourceEvent: any,
-    destAccounts: any[]
+    destAccounts: any[],
+    viaBackfill: boolean = false,
   ) {
     const sourceEventId = sourceEvent.id;
     console.log(`Creating mirrors for event: ${sourceEventId} (${sourceEvent.summary})`);
@@ -42,14 +44,16 @@ export class CalendarSyncService {
       };
     }
 
-    // Fetch the source account's per-source customization (color + label).
+    // Fetch the source account's per-source customization (color + label + window).
     // These govern how mirrored blocks appear on the OTHER calendars, so a
     // user can tell "block from personal" apart from "block from side project"
     // at a glance without event details leaking.
-    const { sourceMirrorColorId, sourceMirrorLabel } =
+    const { sourceMirrorColorId, sourceMirrorLabel, mirrorWindow } =
       await this.getSourceMirrorConfig(userId, sourceAccountId);
 
-    // Handle recurring events
+    // Handle recurring events. Window filtering happens per-instance inside
+    // createRecurringMirrors because different instances of the same series
+    // land on different days/times.
     if (isRecurringEvent(sourceEvent)) {
       console.log('Detected recurring event, expanding instances...');
       return await this.createRecurringMirrors(
@@ -59,8 +63,29 @@ export class CalendarSyncService {
         sourceEvent,
         destAccounts,
         sourceMirrorColorId,
-        sourceMirrorLabel
+        sourceMirrorLabel,
+        mirrorWindow,
+        viaBackfill,
       );
+    }
+
+    // Pro feature: time/day window. If the source has a window configured and
+    // this single (non-recurring) event doesn't overlap, skip mirroring.
+    if (mirrorWindow) {
+      const overlaps = eventOverlapsWindow(
+        {
+          startDateTime: sourceEvent.start?.dateTime,
+          endDateTime: sourceEvent.end?.dateTime,
+          startDate: sourceEvent.start?.date,
+          endDate: sourceEvent.end?.date,
+          timeZone: sourceEvent.start?.timeZone,
+        },
+        mirrorWindow,
+      );
+      if (!overlaps) {
+        console.log(`Event ${sourceEventId} outside mirror window, skipping`);
+        return { successful: [], failed: [] };
+      }
     }
 
     console.log(`Creating mirrors in ${destAccounts.length} destination calendar(s)`);
@@ -108,7 +133,9 @@ export class CalendarSyncService {
 
     console.log(`Successfully created ${successful.length} mirror(s)`);
 
-    // Store mapping
+    // Store mapping. via_backfill=true if this mirror was created during a
+    // Pro-tier backfill of existing events (lets us later delete only these
+    // if the user turns the toggle off).
     await (supabaseAdmin as any).from('event_mappings').insert({
       user_id: userId,
       source_event_id: sourceEventId,
@@ -116,6 +143,7 @@ export class CalendarSyncService {
       source_calendar_id: sourceCalendarId,
       mirrored_events: successful,
       is_recurring: false,
+      via_backfill: viaBackfill,
     });
 
     return { successful, failed };
@@ -123,13 +151,13 @@ export class CalendarSyncService {
 
   /**
    * Look up the source account's mirror display config. Returns safe defaults
-   * ('8' = Graphite, 'Busy') if the account row hasn't been customized yet,
-   * so this is safe to call before migration 015 has run in a given env.
+   * ('8' = Graphite, 'Busy', null window = 24/7) so this is safe to call in
+   * envs that haven't run migrations 015 or 018 yet.
    */
   private async getSourceMirrorConfig(userId: string, sourceAccountId: string) {
     const { data } = await (supabaseAdmin as any)
       .from('user_accounts')
-      .select('mirror_color_id, mirror_label')
+      .select('mirror_color_id, mirror_label, mirror_window')
       .eq('user_id', userId)
       .eq('account_id', sourceAccountId)
       .maybeSingle();
@@ -137,6 +165,7 @@ export class CalendarSyncService {
     return {
       sourceMirrorColorId: (data && data.mirror_color_id) || '8',
       sourceMirrorLabel: (data && data.mirror_label) || 'Busy',
+      mirrorWindow: (data && data.mirror_window) as MirrorWindow | null,
     };
   }
 
@@ -150,7 +179,9 @@ export class CalendarSyncService {
     sourceEvent: any,
     destAccounts: any[],
     sourceMirrorColorId: string,
-    sourceMirrorLabel: string
+    sourceMirrorLabel: string,
+    mirrorWindow: MirrorWindow | null,
+    viaBackfill: boolean = false,
   ) {
     const baseEventId = sourceEvent.id;
     const instances = expandRecurringEvent(sourceEvent);
@@ -168,6 +199,21 @@ export class CalendarSyncService {
     const allFailed: any[] = [];
 
     for (const instance of instances) {
+      // Per-instance window check for recurring events
+      if (mirrorWindow) {
+        const overlaps = eventOverlapsWindow(
+          {
+            startDateTime: instance.start?.dateTime,
+            endDateTime: instance.end?.dateTime,
+            startDate: instance.start?.date,
+            endDate: instance.end?.date,
+            timeZone: instance.start?.timeZone || sourceEvent.start?.timeZone,
+          },
+          mirrorWindow,
+        );
+        if (!overlaps) continue;
+      }
+
       const instanceId = generateInstanceId(baseEventId, instance.instanceDate);
 
       const mirrorPromises = destAccounts.map(async (dest: any) => {
@@ -217,6 +263,7 @@ export class CalendarSyncService {
           mirrored_events: successful,
           is_recurring: true,
           recurring_event_id: baseEventId,
+          via_backfill: viaBackfill,
         });
       }
     }

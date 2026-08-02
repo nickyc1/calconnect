@@ -493,7 +493,7 @@ export default async function Home() {
               </div>
               <div className="cc-v5-q">
                 <h3>Is CalConnect Google verified?</h3>
-                <p>Not yet. The app runs in Google&apos;s testing mode with a 100-user cap. Sign up in that window and we&apos;ll add you as a test user manually. Verification typically takes four to six weeks.</p>
+                <p>Yes. CalConnect passed Google&apos;s OAuth verification review, which means Google audited our privacy policy, data handling, and scope usage. When you sign in, Google shows CalConnect cleanly with no &quot;unverified app&quot; warning. Same trust bar as apps from established SaaS companies.</p>
               </div>
               <div className="cc-v5-q">
                 <h3>Who built this?</h3>
