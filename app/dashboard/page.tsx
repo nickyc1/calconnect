@@ -139,6 +139,20 @@ export default function DashboardPage() {
   const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({})
   const [mirrorSaving, setMirrorSaving] = useState<string | null>(null)
   const [mirrorSaved, setMirrorSaved] = useState<string | null>(null)
+  // Backfill modal state: which account, which stage, and the preview
+  const [backfillModal, setBackfillModal] = useState<{
+    accountId: string
+    stage: 'preview' | 'confirm-cancel'
+  } | null>(null)
+  const [backfillPreview, setBackfillPreview] = useState<{
+    estimateEvents: number
+    isExact: boolean
+    destCount: number
+    minutesLow: number
+    minutesHigh: number
+  } | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [cancelingBackfill, setCancelingBackfill] = useState(false)
   const searchParams = useSearchParams()
 
   const supabase = createBrowserClient(
@@ -301,6 +315,41 @@ export default function DashboardPage() {
   }
 
   // ==== Backfill (Pro): mirror existing events on the source calendar ====
+  const openBackfillPreview = async (accountId: string) => {
+    setBackfillModal({ accountId, stage: 'preview' })
+    setBackfillPreview(null)
+    setPreviewLoading(true)
+    try {
+      const res = await fetch(`/api/mirroring/backfill/preview?accountId=${encodeURIComponent(accountId)}`)
+      const data = await res.json()
+      if (res.ok) setBackfillPreview(data)
+    } catch (err) {
+      console.warn('preview failed', err)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const closeBackfillModal = () => {
+    setBackfillModal(null)
+    setBackfillPreview(null)
+  }
+
+  const startBackfillConfirmed = async (accountId: string) => {
+    closeBackfillModal()
+    await toggleBackfill(accountId, true)
+  }
+
+  const cancelBackfillConfirmed = async (accountId: string) => {
+    setCancelingBackfill(true)
+    try {
+      await toggleBackfill(accountId, false)
+    } finally {
+      setCancelingBackfill(false)
+      closeBackfillModal()
+    }
+  }
+
   const toggleBackfill = async (accountId: string, enable: boolean) => {
     // Optimistic UI: reflect toggle instantly
     setAccounts((prev) => prev.map((a) => a.account_id === accountId
@@ -863,25 +912,22 @@ export default function DashboardPage() {
                     {/* Pro-only settings: mirror window + backfill */}
                     {isPro ? (
                       <>
-                        {/* Row: Time/day window */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.6rem', fontSize: '0.8rem' }}>
-                          <span style={{ color: '#666' }}>Mirror during:</span>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                        {/* Row: Time/day window — single row, no wrap */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#4a4a45', whiteSpace: 'nowrap' }}>
                             <input
                               type="checkbox"
                               checked={winActive}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  saveMirrorConfig(account.account_id, { mirrorWindow: { days: [1,2,3,4,5], start_min: 540, end_min: 1020 } })
-                                } else {
-                                  saveMirrorConfig(account.account_id, { mirrorWindow: null })
-                                }
-                              }}
+                              onChange={(e) => saveMirrorConfig(account.account_id, {
+                                mirrorWindow: e.target.checked
+                                  ? { days: [1,2,3,4,5], start_min: 540, end_min: 1020 }
+                                  : null,
+                              })}
                             />
-                            <span>Only certain days/times</span>
+                            <span>Mirror only certain days/times</span>
                           </label>
                           {winActive && (
-                            <>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <div style={{ display: 'inline-flex', gap: 3 }}>
                                 {['S','M','T','W','T','F','S'].map((letter, i) => {
                                   const on = win.days.includes(i)
@@ -895,21 +941,16 @@ export default function DashboardPage() {
                                         saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, days: newDays } })
                                       }}
                                       style={{
-                                        width: 26, height: 26, borderRadius: '50%',
+                                        width: 24, height: 24, borderRadius: '50%',
                                         border: '1px solid ' + (on ? '#14140f' : '#d5d3ce'),
                                         background: on ? '#14140f' : 'white',
-                                        color: on ? '#f7f5ee' : '#666',
+                                        color: on ? '#f7f5ee' : '#4a4a45',
                                         fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: 0,
                                       }}
                                     >{letter}</button>
                                   )
                                 })}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, days: [1,2,3,4,5] } })}
-                                style={{ background: 'transparent', border: 'none', color: '#de5b28', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline', padding: 0 }}
-                              >Weekdays</button>
                               <input
                                 type="time"
                                 value={`${String(Math.floor(win.start_min / 60)).padStart(2,'0')}:${String(win.start_min % 60).padStart(2,'0')}`}
@@ -917,9 +958,9 @@ export default function DashboardPage() {
                                   const [h,m] = e.target.value.split(':').map(Number)
                                   saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, start_min: h * 60 + m } })
                                 }}
-                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem' }}
+                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem', width: 100 }}
                               />
-                              <span style={{ color: '#8a887f' }}>to</span>
+                              <span style={{ color: '#8a887f' }}>→</span>
                               <input
                                 type="time"
                                 value={`${String(Math.floor(win.end_min / 60)).padStart(2,'0')}:${String(win.end_min % 60).padStart(2,'0')}`}
@@ -927,36 +968,71 @@ export default function DashboardPage() {
                                   const [h,m] = e.target.value.split(':').map(Number)
                                   saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, end_min: h * 60 + m } })
                                 }}
-                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem' }}
+                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem', width: 100 }}
                               />
-                            </>
+                            </div>
                           )}
                         </div>
 
-                        {/* Row: Backfill existing events */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.6rem', fontSize: '0.8rem' }}>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={backfillOn || backfillRunning}
-                              onChange={(e) => toggleBackfill(account.account_id, e.target.checked)}
-                              disabled={backfillRunning}
-                            />
-                            <span style={{ color: '#666' }}>Mirror existing events (next 5 years)</span>
-                          </label>
-                          {backfillRunning && (
-                            <span style={{ color: '#1e5f22', fontWeight: 500 }}>
-                              Mirroring {account.backfill_progress || 0}{account.backfill_total ? ` of ${account.backfill_total}` : ''} events…
-                            </span>
-                          )}
-                          {backfillStatus === 'complete' && backfillOn && (
-                            <span style={{ color: '#1e5f22', fontWeight: 500 }}>
-                              ✓ {account.backfill_progress || 0} events mirrored
-                            </span>
-                          )}
-                          {backfillStatus === 'failed' && (
-                            <span style={{ color: '#a11616' }}>Backfill failed — try again</span>
-                          )}
+                        {/* Row: Backfill existing events — button-driven with modal */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap', color: '#4a4a45' }}>
+                          {backfillStatus === 'idle' || backfillStatus === 'canceled' ? (
+                            <button
+                              type="button"
+                              onClick={() => openBackfillPreview(account.account_id)}
+                              style={{
+                                background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
+                                padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
+                                cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >
+                              Mirror existing events →
+                            </button>
+                          ) : backfillRunning ? (
+                            <>
+                              <span style={{ color: '#1e5f22', fontWeight: 500 }}>
+                                {(account.backfill_progress || 0) === 0
+                                  ? 'Starting…'
+                                  : `Mirroring ${account.backfill_progress} events${account.backfill_total ? ` of ${account.backfill_total}` : ''}…`
+                                }
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setBackfillModal({ accountId: account.account_id, stage: 'confirm-cancel' })}
+                                style={{
+                                  background: 'transparent', border: '1px solid #d5d3ce', color: '#a11616',
+                                  padding: '3px 10px', borderRadius: 6, fontSize: '0.75rem',
+                                  cursor: 'pointer', fontFamily: 'inherit',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : backfillStatus === 'complete' ? (
+                            <>
+                              <span style={{ color: '#1e5f22', fontWeight: 500 }}>
+                                ✓ {account.backfill_progress || 0} existing events mirrored
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setBackfillModal({ accountId: account.account_id, stage: 'confirm-cancel' })}
+                                style={{ background: 'transparent', border: 'none', color: '#8a887f', fontSize: '0.75rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                              >
+                                Remove
+                              </button>
+                            </>
+                          ) : backfillStatus === 'failed' ? (
+                            <>
+                              <span style={{ color: '#a11616' }}>Backfill failed.</span>
+                              <button
+                                type="button"
+                                onClick={() => openBackfillPreview(account.account_id)}
+                                style={{ background: 'transparent', border: 'none', color: '#de5b28', fontSize: '0.75rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                              >
+                                Retry
+                              </button>
+                            </>
+                          ) : null}
                         </div>
                       </>
                     ) : (
@@ -1242,6 +1318,89 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
+
+      {backfillModal && (() => {
+        const acct = accounts.find(a => a.account_id === backfillModal.accountId)
+        if (!acct) return null
+        const stage = backfillModal.stage
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 55, padding: '1rem',
+            }}
+          >
+            <div style={{ background: 'white', borderRadius: 14, padding: '2rem', maxWidth: 520, width: '100%', boxShadow: '0 30px 80px rgba(0,0,0,0.3)' }}>
+              {stage === 'preview' ? (
+                <>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.35rem', color: '#14140f' }}>Mirror existing events?</h3>
+                  <p style={{ margin: '0 0 1.25rem', color: '#4a4a45', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                    CalConnect will look through events on <strong>{acct.google_email}</strong> over the next 5 years and create a &quot;Busy&quot; block on your other connected calendars for each one. Your source calendar is never modified.
+                  </p>
+                  <div style={{ background: '#faf9f4', border: '1px solid #ede9dc', borderRadius: 8, padding: '12px 14px', marginBottom: '1.25rem', fontSize: '0.9rem', color: '#4a4a45' }}>
+                    {previewLoading ? (
+                      <span style={{ color: '#8a887f' }}>Checking your calendar…</span>
+                    ) : backfillPreview ? (
+                      <>
+                        <div><strong>{backfillPreview.isExact ? `${backfillPreview.estimateEvents.toLocaleString()}` : `About ${backfillPreview.estimateEvents.toLocaleString()}`}</strong> events found</div>
+                        <div style={{ marginTop: 4 }}>Mirroring to <strong>{backfillPreview.destCount}</strong> other calendar{backfillPreview.destCount === 1 ? '' : 's'}</div>
+                        <div style={{ marginTop: 4, color: '#8a887f' }}>Estimated time: ~{backfillPreview.minutesLow}{backfillPreview.minutesLow !== backfillPreview.minutesHigh ? `-${backfillPreview.minutesHigh}` : ''} min. You can cancel any time.</div>
+                      </>
+                    ) : (
+                      <span style={{ color: '#a11616' }}>Could not preview. Try starting anyway or contact support.</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={closeBackfillModal}
+                      style={{ background: 'transparent', color: '#666', border: '1px solid #d5d3ce', borderRadius: 6, padding: '0.55rem 1rem', fontSize: '0.9rem', cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => startBackfillConfirmed(acct.account_id)}
+                      disabled={previewLoading}
+                      style={{ background: '#14140f', color: '#f7f5ee', border: 'none', borderRadius: 6, padding: '0.55rem 1.2rem', fontSize: '0.9rem', fontWeight: 500, cursor: previewLoading ? 'not-allowed' : 'pointer', opacity: previewLoading ? 0.6 : 1 }}
+                    >
+                      Yes, start mirroring
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', color: '#14140f' }}>
+                    {acct.backfill_status === 'complete' ? 'Remove backfilled blocks?' : 'Cancel and remove?'}
+                  </h3>
+                  <p style={{ margin: '0 0 1.25rem', color: '#4a4a45', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                    {acct.backfill_status === 'complete'
+                      ? `This will delete the ${acct.backfill_progress || 0} "Busy" blocks CalConnect created from your existing events. New events (going forward) will continue to mirror as normal.`
+                      : `This will stop the backfill and delete the ${acct.backfill_progress || 0} "Busy" blocks CalConnect has created so far. New events (going forward) will continue to mirror as normal. Your source calendar is untouched.`}
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={closeBackfillModal}
+                      disabled={cancelingBackfill}
+                      style={{ background: 'transparent', color: '#666', border: '1px solid #d5d3ce', borderRadius: 6, padding: '0.55rem 1rem', fontSize: '0.9rem', cursor: cancelingBackfill ? 'not-allowed' : 'pointer' }}
+                    >
+                      Keep it
+                    </button>
+                    <button
+                      onClick={() => cancelBackfillConfirmed(acct.account_id)}
+                      disabled={cancelingBackfill}
+                      style={{ background: '#a11616', color: 'white', border: 'none', borderRadius: 6, padding: '0.55rem 1.2rem', fontSize: '0.9rem', fontWeight: 500, cursor: cancelingBackfill ? 'wait' : 'pointer', opacity: cancelingBackfill ? 0.6 : 1 }}
+                    >
+                      {cancelingBackfill ? 'Removing…' : 'Yes, remove blocks'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {showUpgrade && (
         <div
