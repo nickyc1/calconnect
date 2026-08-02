@@ -109,48 +109,92 @@ export async function POST(req: NextRequest) {
 
   const acctRow = acct as any;
 
-  // === disable: delete backfill mirrors + reset state ===
+  // === disable: chunked delete of backfill mirrors + cascade duplicates ===
+  // Vercel's 60s timeout can't handle thousands of Google API deletes in one
+  // call, so we chunk this. First call sets status='canceling'; subsequent
+  // calls delete DISABLE_CHUNK mappings at a time. When there are none left,
+  // status flips to 'canceled'. The client polls just like it does for ticks.
+  //
+  // We delete two categories of mappings:
+  //   1. via_backfill=true — mirrors WE created during backfill
+  //   2. mappings with created_at >= backfill_started_at (cascade duplicates
+  //      created by webhooks while the backfill was running — same session,
+  //      same accident, same cleanup)
+  // Either way we NEVER touch the source calendar; we only delete events on
+  // destination calendars that our own row (mirrored_events) points at.
   if (action === 'disable') {
-    // Find all backfill mirrors from this source and delete the Google Calendar
-    // events + the mapping rows. via_backfill=true means WE created it during a
-    // backfill; we're not touching real events created via push notifications.
+    const DISABLE_CHUNK = 40;
+
+    // First call: mark canceling and blow away the run so ticks stop.
+    if (acctRow.backfill_status !== 'canceling') {
+      await (supabaseAdmin as any)
+        .from('user_accounts')
+        .update({
+          mirror_existing_enabled: false,
+          backfill_status: 'canceling',
+          backfill_cursor: null,
+          backfill_error: null,
+        })
+        .eq('account_id', accountId)
+        .eq('user_id', user.id);
+    }
+
+    const cancelFloor = acctRow.backfill_started_at || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // Grab one chunk: via_backfill=true OR (source_account=X AND created_at >= floor).
+    // A single .or() clause covers both without a second query.
     const { data: mappings } = await (supabaseAdmin as any)
       .from('event_mappings')
-      .select('id, mirrored_events')
+      .select('id, mirrored_events, via_backfill, created_at')
       .eq('user_id', user.id)
       .eq('source_account_id', accountId)
-      .eq('via_backfill', true);
+      .or(`via_backfill.eq.true,created_at.gte.${cancelFloor}`)
+      .limit(DISABLE_CHUNK);
 
+    const rows = (mappings as any[]) || [];
     let deleted = 0;
-    for (const row of (mappings as any[]) || []) {
+    for (const row of rows) {
       for (const mirror of (row.mirrored_events as any[]) || []) {
         try {
           const auth = await googleAuth.getClientByAccountId(user.id, mirror.account_id);
           await googleCalendar.deleteEvent(auth, mirror.calendar_id || 'primary', mirror.event_id);
           deleted++;
         } catch (err) {
-          // Event may have been deleted manually — safe to skip and continue.
           console.warn(`backfill/disable: failed to delete mirror ${mirror.event_id}`, err);
         }
       }
       await (supabaseAdmin as any).from('event_mappings').delete().eq('id', row.id);
     }
 
-    await (supabaseAdmin as any)
-      .from('user_accounts')
-      .update({
-        mirror_existing_enabled: false,
-        backfill_status: 'canceled',
-        backfill_progress: 0,
-        backfill_total: null,
-        backfill_cursor: null,
-        backfill_started_at: null,
-        backfill_error: null,
-      })
-      .eq('account_id', accountId)
-      .eq('user_id', user.id);
+    // Are there more mappings still to clean up?
+    const { count: remaining } = await (supabaseAdmin as any)
+      .from('event_mappings')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('source_account_id', accountId)
+      .or(`via_backfill.eq.true,created_at.gte.${cancelFloor}`);
 
-    return NextResponse.json({ ok: true, deleted, status: 'canceled' });
+    const done = !remaining || remaining === 0;
+    if (done) {
+      await (supabaseAdmin as any)
+        .from('user_accounts')
+        .update({
+          backfill_status: 'canceled',
+          backfill_progress: 0,
+          backfill_total: null,
+          backfill_cursor: null,
+          backfill_started_at: null,
+        })
+        .eq('account_id', accountId)
+        .eq('user_id', user.id);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      status: done ? 'canceled' : 'canceling',
+      deleted,
+      remaining: remaining || 0,
+    });
   }
 
   // === enable: kick off a fresh backfill (or restart if previously canceled) ===
@@ -240,6 +284,14 @@ export async function POST(req: NextRequest) {
   let processed = 0;
   for (const ev of events) {
     if (ev.status === 'cancelled') continue;
+    // CRITICAL: never re-mirror our own mirror events. Without this guard,
+    // multi-source setups cascade — source B's push-notification mirrors on
+    // source A get read here, mirrored to C and back to B, and the whole
+    // system blows up with thousands of duplicate Busy blocks. The webhook
+    // already skips these; backfill needs the same guard.
+    if ((ev as any).extendedProperties?.private?.calconnect_is_mirror === 'true') {
+      continue;
+    }
     try {
       await syncService.createMirrorEvents(user.id, accountId, 'primary', ev, dests, /* viaBackfill */ true);
       processed++;

@@ -91,7 +91,7 @@ interface Account {
   mirror_label?: string
   mirror_window?: MirrorWindow | null
   mirror_existing_enabled?: boolean
-  backfill_status?: 'idle' | 'running' | 'complete' | 'failed' | 'canceled'
+  backfill_status?: 'idle' | 'running' | 'canceling' | 'complete' | 'failed' | 'canceled'
   backfill_progress?: number
   backfill_total?: number | null
 }
@@ -351,9 +351,10 @@ export default function DashboardPage() {
   }
 
   const toggleBackfill = async (accountId: string, enable: boolean) => {
-    // Optimistic UI: reflect toggle instantly
+    // Optimistic UI: reflect toggle instantly. Disable → 'canceling' (chunked
+    // cleanup that the poll loop drives). Enable → 'running'.
     setAccounts((prev) => prev.map((a) => a.account_id === accountId
-      ? { ...a, mirror_existing_enabled: enable, backfill_status: enable ? 'running' : 'canceled', backfill_progress: 0, backfill_total: null }
+      ? { ...a, mirror_existing_enabled: enable, backfill_status: enable ? 'running' : 'canceling', backfill_progress: 0, backfill_total: null }
       : a))
     try {
       const res = await fetch('/api/mirroring/backfill', {
@@ -378,22 +379,29 @@ export default function DashboardPage() {
     }
   }
 
-  // Poll running backfills every 2.5s. Each tick triggers the next chunk.
+  // Poll active backfills every 2.5s. 'running' ticks forward; 'canceling'
+  // re-calls disable which deletes another chunk of mirrors until done.
   useEffect(() => {
-    const running = accounts.filter((a) => a.backfill_status === 'running')
-    if (running.length === 0) return
+    const active = accounts.filter((a) => a.backfill_status === 'running' || a.backfill_status === 'canceling')
+    if (active.length === 0) return
     const timer = setTimeout(async () => {
-      for (const acct of running) {
+      for (const acct of active) {
+        const action = acct.backfill_status === 'canceling' ? 'disable' : 'tick'
         try {
           const res = await fetch('/api/mirroring/backfill', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId: acct.account_id, action: 'tick' }),
+            body: JSON.stringify({ accountId: acct.account_id, action }),
           })
           const data = await res.json().catch(() => ({}))
           if (res.ok) {
             setAccounts((prev) => prev.map((a) => a.account_id === acct.account_id
-              ? { ...a, backfill_status: data.status, backfill_progress: data.progress, backfill_total: data.total ?? null }
+              ? {
+                  ...a,
+                  backfill_status: data.status,
+                  backfill_progress: data.progress ?? a.backfill_progress,
+                  backfill_total: data.total ?? a.backfill_total ?? null,
+                }
               : a))
           }
         } catch (err) {
@@ -1021,6 +1029,10 @@ export default function DashboardPage() {
                                 Remove
                               </button>
                             </>
+                          ) : backfillStatus === 'canceling' ? (
+                            <span style={{ color: '#a11616', fontWeight: 500 }}>
+                              Removing mirrored blocks…
+                            </span>
                           ) : backfillStatus === 'failed' ? (
                             <>
                               <span style={{ color: '#a11616' }}>Backfill failed.</span>
