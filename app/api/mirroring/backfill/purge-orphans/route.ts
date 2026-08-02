@@ -28,7 +28,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const CHUNK = 250;
+// 250 was too greedy — sequential Google deletes hit Vercel's 60s budget.
+// 50 leaves headroom for retries and the DB cleanup at the end.
+const CHUNK = 50;
 
 export async function POST(req: NextRequest) {
   const supabase = createClient();
