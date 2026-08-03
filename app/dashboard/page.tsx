@@ -937,7 +937,7 @@ export default function DashboardPage() {
                       Source
                       <span className="cc-tooltip">
                         <span className="cc-tooltip-trigger">?</span>
-                        <span className="cc-tooltip-bubble">Any event I add here will appear as Busy on my other calendars.</span>
+                        <span className="cc-tooltip-bubble">Any new event I add here will appear as Busy on my other calendars.</span>
                       </span>
                     </span>
                   </label>
