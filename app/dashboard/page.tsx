@@ -5,6 +5,26 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useSearchParams } from 'next/navigation'
 
 /**
+ * Animated three-dot ellipsis. Used inline in status labels like
+ * "Starting…" and "Mirroring X events…" so the user sees the process is
+ * live, not frozen. Uses a CSS keyframe cycle (opacity fade) with staggered
+ * delays so the dots ripple. Fully local — no global CSS pollution.
+ */
+function AnimatedDots() {
+  return (
+    <span style={{ display: 'inline-block', width: '1.2em' }}>
+      <style>{`
+        @keyframes cc-dot { 0%, 20% { opacity: 0.2 } 50% { opacity: 1 } 100% { opacity: 0.2 } }
+        .cc-dot { animation: cc-dot 1.2s infinite; }
+      `}</style>
+      <span className="cc-dot" style={{ animationDelay: '0s' }}>.</span>
+      <span className="cc-dot" style={{ animationDelay: '0.2s' }}>.</span>
+      <span className="cc-dot" style={{ animationDelay: '0.4s' }}>.</span>
+    </span>
+  )
+}
+
+/**
  * Tiny CSS-drawn calendar icon used in the "How CalConnect works" 3-step
  * explainer. topColor is the colored strip along the top; a small orange
  * checkmark badge appears in the bottom-right when checked (used to
@@ -355,13 +375,17 @@ export default function DashboardPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         // Serialize error (409) → explain, don't just show raw message.
+        let msg: string
         if (res.status === 409 && data?.conflicts) {
-          setStatus(`Another backfill is already running on ${data.conflicts.join(', ')}. Wait or cancel it before starting this one.`)
+          msg = `Another backfill is already running on ${data.conflicts.join(', ')}. Wait or cancel it before starting this one.`
         } else if (res.status === 403) {
-          setStatus('This feature is in beta and not yet enabled on your account. Contact support to opt in.')
+          msg = 'This feature is in beta and not yet enabled on your account. Contact support to opt in.'
         } else {
-          setStatus(data?.error || 'Could not start backfill.')
+          msg = data?.error || 'Could not start backfill.'
         }
+        setStatus(msg)
+        // Auto-clear after 6s but only if the message hasn't changed since
+        setTimeout(() => setStatus((s) => s === msg ? '' : s), 6000)
         setAccounts((prev) => prev.map((a) => a.account_id === accountId
           ? { ...a, mirror_existing_enabled: false, backfill_status: 'idle' }
           : a))
@@ -1096,8 +1120,8 @@ export default function DashboardPage() {
                             <>
                               <span style={{ color: '#1e5f22', fontWeight: 500 }}>
                                 {(account.backfill_progress || 0) === 0
-                                  ? 'Starting…'
-                                  : `Mirroring ${account.backfill_progress} events${account.backfill_total ? ` of ${account.backfill_total}` : ''}…`
+                                  ? <>Starting<AnimatedDots /></>
+                                  : <>Mirroring {account.backfill_progress} events{account.backfill_total ? ` of ${account.backfill_total}` : ''}<AnimatedDots /></>
                                 }
                               </span>
                               <button
@@ -1127,7 +1151,7 @@ export default function DashboardPage() {
                             </>
                           ) : backfillStatus === 'canceling' ? (
                             <span style={{ color: '#a11616', fontWeight: 500 }}>
-                              Removing mirrored blocks…
+                              Removing mirrored blocks<AnimatedDots />
                             </span>
                           ) : backfillStatus === 'failed' ? (
                             <>
@@ -1450,7 +1474,7 @@ export default function DashboardPage() {
                   </p>
                   <div style={{ background: '#faf9f4', border: '1px solid #ede9dc', borderRadius: 8, padding: '12px 14px', marginBottom: '1.25rem', fontSize: '0.9rem', color: '#4a4a45' }}>
                     {previewLoading ? (
-                      <span style={{ color: '#8a887f' }}>Checking your calendar…</span>
+                      <span style={{ color: '#8a887f' }}>Checking your calendar<AnimatedDots /></span>
                     ) : backfillPreview ? (
                       <>
                         <div><strong>{backfillPreview.isExact ? `${backfillPreview.estimateEvents.toLocaleString()}` : `About ${backfillPreview.estimateEvents.toLocaleString()}`}</strong> events found</div>
