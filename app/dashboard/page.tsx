@@ -152,6 +152,11 @@ export default function DashboardPage() {
     minutesHigh: number
   } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  // Local draft of the mirror window BEFORE the user has committed anything.
+  // Clicking the checkbox pre-fills a draft (all 7 days, no times) but does
+  // NOT save — the "Saved" toast only appears after the user changes a day or
+  // sets a time. Prevents the "instant Saved" that Nick called out as jarring.
+  const [windowDrafts, setWindowDrafts] = useState<Record<string, MirrorWindow>>({})
   const [cancelingBackfill, setCancelingBackfill] = useState(false)
   const searchParams = useSearchParams()
 
@@ -315,12 +320,12 @@ export default function DashboardPage() {
   }
 
   // ==== Backfill (Pro): mirror existing events on the source calendar ====
-  const openBackfillPreview = async (accountId: string) => {
+  const openBackfillPreview = async (accountId: string, horizonYears: number = 1) => {
     setBackfillModal({ accountId, stage: 'preview' })
     setBackfillPreview(null)
     setPreviewLoading(true)
     try {
-      const res = await fetch(`/api/mirroring/backfill/preview?accountId=${encodeURIComponent(accountId)}`)
+      const res = await fetch(`/api/mirroring/backfill/preview?accountId=${encodeURIComponent(accountId)}&horizonYears=${horizonYears}`)
       const data = await res.json()
       if (res.ok) setBackfillPreview(data)
     } catch (err) {
@@ -970,67 +975,115 @@ export default function DashboardPage() {
                     {/* Pro-only settings: mirror window + backfill */}
                     {isPro ? (
                       <>
-                        {/* Row: Time/day window — single row, no wrap */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', flexWrap: 'wrap' }}>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#4a4a45', whiteSpace: 'nowrap' }}>
-                            <input
-                              type="checkbox"
-                              checked={winActive}
-                              onChange={(e) => saveMirrorConfig(account.account_id, {
-                                mirrorWindow: e.target.checked
-                                  ? { days: [1,2,3,4,5], start_min: 540, end_min: 1020 }
-                                  : null,
-                              })}
-                            />
-                            <span>Mirror only certain days/times</span>
-                          </label>
-                          {winActive && (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <div style={{ display: 'inline-flex', gap: 3 }}>
-                                {['S','M','T','W','T','F','S'].map((letter, i) => {
-                                  const on = win.days.includes(i)
-                                  return (
-                                    <button
-                                      key={i}
-                                      type="button"
-                                      onClick={() => {
-                                        const newDays = on ? win.days.filter(d => d !== i) : [...win.days, i]
-                                        if (newDays.length === 0) return
-                                        saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, days: newDays } })
-                                      }}
-                                      style={{
-                                        width: 24, height: 24, borderRadius: '50%',
-                                        border: '1px solid ' + (on ? '#14140f' : '#d5d3ce'),
-                                        background: on ? '#14140f' : 'white',
-                                        color: on ? '#f7f5ee' : '#4a4a45',
-                                        fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: 0,
-                                      }}
-                                    >{letter}</button>
-                                  )
-                                })}
-                              </div>
-                              <input
-                                type="time"
-                                value={`${String(Math.floor(win.start_min / 60)).padStart(2,'0')}:${String(win.start_min % 60).padStart(2,'0')}`}
-                                onChange={(e) => {
-                                  const [h,m] = e.target.value.split(':').map(Number)
-                                  saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, start_min: h * 60 + m } })
-                                }}
-                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem', width: 100 }}
-                              />
-                              <span style={{ color: '#8a887f' }}>→</span>
-                              <input
-                                type="time"
-                                value={`${String(Math.floor(win.end_min / 60)).padStart(2,'0')}:${String(win.end_min % 60).padStart(2,'0')}`}
-                                onChange={(e) => {
-                                  const [h,m] = e.target.value.split(':').map(Number)
-                                  saveMirrorConfig(account.account_id, { mirrorWindow: { ...win, end_min: h * 60 + m } })
-                                }}
-                                style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem', width: 100 }}
-                              />
+                        {/* Row: Time/day window.
+                            - Toggle ON = show draft (all 7 days, no times) locally; NOT saved yet
+                            - Only saves once user actually picks a day off/on OR sets a time
+                            - Days: green when selected, faint red when not
+                            - Times: 15-minute dropdowns instead of manual entry
+                            - Saved badge sits on the RIGHT so it doesn't push layout down */}
+                        {(() => {
+                          const draft = windowDrafts[account.account_id]
+                          const isDrafting = !!draft && !account.mirror_window
+                          const activeWin: MirrorWindow | null = draft || account.mirror_window || null
+                          const showControls = !!activeWin
+                          const localTz = typeof Intl !== 'undefined'
+                            ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                            : 'local time'
+                          const setDraftAndSave = (next: MirrorWindow) => {
+                            setWindowDrafts((p) => { const c = {...p}; delete c[account.account_id]; return c })
+                            saveMirrorConfig(account.account_id, { mirrorWindow: next })
+                          }
+                          const toggleDay = (i: number) => {
+                            if (!activeWin) return
+                            const on = activeWin.days.includes(i)
+                            const newDays = on ? activeWin.days.filter(d => d !== i) : [...activeWin.days, i].sort()
+                            if (newDays.length === 0) return
+                            setDraftAndSave({ ...activeWin, days: newDays })
+                          }
+                          const setTime = (which: 'start_min' | 'end_min', minutes: number) => {
+                            if (!activeWin) return
+                            setDraftAndSave({ ...activeWin, [which]: minutes })
+                          }
+                          const timeOptions: {v: number; label: string}[] = []
+                          for (let m = 0; m < 24 * 60; m += 15) {
+                            const h = Math.floor(m / 60)
+                            const mm = m % 60
+                            const ampm = h >= 12 ? 'PM' : 'AM'
+                            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+                            timeOptions.push({ v: m, label: `${h12}:${String(mm).padStart(2,'0')} ${ampm}` })
+                          }
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#4a4a45', whiteSpace: 'nowrap' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={showControls}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      // Draft only — don't save yet
+                                      setWindowDrafts((p) => ({ ...p, [account.account_id]: { days: [0,1,2,3,4,5,6], start_min: 540, end_min: 1020 } }))
+                                    } else {
+                                      // Turn off: clear draft AND clear saved window
+                                      setWindowDrafts((p) => { const c = {...p}; delete c[account.account_id]; return c })
+                                      if (account.mirror_window) saveMirrorConfig(account.account_id, { mirrorWindow: null })
+                                    }
+                                  }}
+                                />
+                                <span>Mirror only certain days/times</span>
+                              </label>
+                              {showControls && activeWin && (
+                                <>
+                                  <div style={{ display: 'inline-flex', gap: 3 }}>
+                                    {['S','M','T','W','T','F','S'].map((letter, i) => {
+                                      const on = activeWin.days.includes(i)
+                                      return (
+                                        <button
+                                          key={i}
+                                          type="button"
+                                          onClick={() => toggleDay(i)}
+                                          style={{
+                                            width: 26, height: 26, borderRadius: '50%',
+                                            border: '1px solid ' + (on ? '#7ea87f' : '#e5c7c7'),
+                                            background: on ? '#e8f3e6' : '#fceded',
+                                            color: on ? '#1e5f22' : '#a86464',
+                                            fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0,
+                                            transition: 'all 0.15s',
+                                          }}
+                                          title={on ? 'Selected — click to remove' : 'Not selected — click to add'}
+                                        >{letter}</button>
+                                      )
+                                    })}
+                                  </div>
+                                  <select
+                                    value={activeWin.start_min}
+                                    onChange={(e) => setTime('start_min', parseInt(e.target.value, 10))}
+                                    style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem', background: 'white' }}
+                                  >
+                                    {timeOptions.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+                                  </select>
+                                  <span style={{ color: '#8a887f' }}>→</span>
+                                  <select
+                                    value={activeWin.end_min}
+                                    onChange={(e) => setTime('end_min', parseInt(e.target.value, 10))}
+                                    style={{ padding: '3px 6px', border: '1px solid #d5d3ce', borderRadius: 4, fontSize: '0.8rem', background: 'white' }}
+                                  >
+                                    {timeOptions.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+                                  </select>
+                                  <span style={{ color: '#8a887f', fontSize: '0.72rem' }}>({localTz})</span>
+                                </>
+                              )}
+                              {/* Saved badge on the RIGHT so it doesn't shift the row */}
+                              <span style={{
+                                marginLeft: 'auto',
+                                fontSize: '0.72rem',
+                                color: mirrorSaved === account.account_id ? '#0e6b2f' : (isDrafting ? '#8a887f' : 'transparent'),
+                                fontStyle: isDrafting && mirrorSaved !== account.account_id ? 'italic' : 'normal',
+                              }}>
+                                {isDrafting && mirrorSaved !== account.account_id ? 'Pick a day or time to save' : (mirrorSaved === account.account_id ? 'Saved' : ' ')}
+                              </span>
                             </div>
-                          )}
-                        </div>
+                          )
+                        })()}
 
                         {/* Row: Backfill existing events — button-driven with modal */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap', color: '#4a4a45' }}>
@@ -1400,7 +1453,7 @@ export default function DashboardPage() {
                 <>
                   <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.35rem', color: '#14140f' }}>Mirror existing events?</h3>
                   <p style={{ margin: '0 0 1.25rem', color: '#4a4a45', fontSize: '0.95rem', lineHeight: 1.5 }}>
-                    CalConnect will look through events on <strong>{acct.google_email}</strong> over the next 5 years and create a &quot;Busy&quot; block on your other connected calendars for each one. Your source calendar is never modified.
+                    CalConnect will look through events on <strong>{acct.google_email}</strong> over the next 1 year{acct.mirror_window ? ' (only during your selected days/times)' : ''} and create a &quot;Busy&quot; block on your other connected calendars for each one. Your source calendar is never modified.
                   </p>
                   <div style={{ background: '#faf9f4', border: '1px solid #ede9dc', borderRadius: 8, padding: '12px 14px', marginBottom: '1.25rem', fontSize: '0.9rem', color: '#4a4a45' }}>
                     {previewLoading ? (
