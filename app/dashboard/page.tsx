@@ -1105,23 +1105,29 @@ export default function DashboardPage() {
                         {/* Row: Backfill existing events — button-driven with modal */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap', color: '#4a4a45' }}>
                           {backfillStatus === 'idle' || backfillStatus === 'canceled' ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <button
-                                type="button"
-                                onClick={() => openBackfillPreview(account.account_id)}
-                                style={{
-                                  background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
-                                  padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
-                                  cursor: 'pointer', fontFamily: 'inherit',
-                                }}
-                              >
-                                Mirror existing events →
-                              </button>
-                              <span className="cc-tooltip">
-                                <span className="cc-tooltip-trigger">?</span>
-                                <span className="cc-tooltip-bubble">Mirrors events already on this calendar to your other connected calendars as Busy blocks.</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#1e5f22', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontWeight: 700 }}>✓</span>
+                                Mirroring new events automatically as they're added
                               </span>
-                            </span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => openBackfillPreview(account.account_id)}
+                                  style={{
+                                    background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
+                                    padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
+                                    cursor: 'pointer', fontFamily: 'inherit',
+                                  }}
+                                >
+                                  Mirror existing events →
+                                </button>
+                                <span className="cc-tooltip">
+                                  <span className="cc-tooltip-trigger">?</span>
+                                  <span className="cc-tooltip-bubble">One-time backfill of events already on this calendar.</span>
+                                </span>
+                              </span>
+                            </div>
                           ) : backfillRunning ? (
                             <>
                               <span style={{ color: '#1e5f22', fontWeight: 500 }}>
@@ -1477,6 +1483,9 @@ export default function DashboardPage() {
                   <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.35rem', color: '#14140f' }}>Mirror existing events?</h3>
                   <p style={{ margin: '0 0 1.25rem', color: '#4a4a45', fontSize: '0.95rem', lineHeight: 1.5 }}>
                     CalConnect will look through events on <strong>{acct.google_email}</strong> over the next 1 year{acct.mirror_window ? ' (only during your selected days/times)' : ''} and create a &quot;Busy&quot; block on your other connected calendars for each one. Your source calendar is never modified.
+                  </p>
+                  <p style={{ margin: '0 0 1.25rem', color: '#8a887f', fontSize: '0.85rem', lineHeight: 1.5, fontStyle: 'italic' }}>
+                    This adds a one-time backfill of events already scheduled. New events on this calendar already mirror automatically.
                   </p>
                   <div style={{ background: '#faf9f4', border: '1px solid #ede9dc', borderRadius: 8, padding: '12px 14px', marginBottom: '1.25rem', fontSize: '0.9rem', color: '#4a4a45' }}>
                     {previewLoading ? (
