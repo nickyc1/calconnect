@@ -206,6 +206,7 @@ function OnboardingContent() {
               <ul className="ob-list">
                 <li>Real-time push sync</li>
                 <li>Recurring &amp; bidirectional mirroring</li>
+                <li>Custom color and label per source calendar</li>
                 <li>Add calendars any time · $4/mo each</li>
               </ul>
               <div className="ob-plan-trial">7 days free · cancel any time</div>
@@ -223,7 +224,8 @@ function OnboardingContent() {
               <div className="ob-plan-what">10 connected Google Calendars</div>
               <ul className="ob-list">
                 <li>Everything in Basic</li>
-                <li>Custom color and label per source calendar</li>
+                <li><strong>Mirror only certain days/times</strong></li>
+                <li><strong>Backfill existing events</strong></li>
                 <li>Priority email support</li>
               </ul>
               <div className="ob-plan-trial">7 days free · cancel any time</div>
