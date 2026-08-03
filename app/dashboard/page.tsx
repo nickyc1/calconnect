@@ -335,9 +335,59 @@ export default function DashboardPage() {
     setBackfillPreview(null)
   }
 
-  const startBackfillConfirmed = async (accountId: string) => {
+  const startBackfillConfirmed = async (accountId: string, horizonYears: number = 1) => {
     closeBackfillModal()
-    await toggleBackfill(accountId, true)
+    // Optimistic UI
+    setAccounts((prev) => prev.map((a) => a.account_id === accountId
+      ? { ...a, mirror_existing_enabled: true, backfill_status: 'running', backfill_progress: 0, backfill_total: null }
+      : a))
+    try {
+      const res = await fetch('/api/mirroring/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, action: 'enable', horizonYears }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // Serialize error (409) → explain, don't just show raw message.
+        if (res.status === 409 && data?.conflicts) {
+          setStatus(`Another backfill is already running on ${data.conflicts.join(', ')}. Wait or cancel it before starting this one.`)
+        } else if (res.status === 403) {
+          setStatus('This feature is in beta and not yet enabled on your account. Contact support to opt in.')
+        } else {
+          setStatus(data?.error || 'Could not start backfill.')
+        }
+        setAccounts((prev) => prev.map((a) => a.account_id === accountId
+          ? { ...a, mirror_existing_enabled: false, backfill_status: 'idle' }
+          : a))
+        return
+      }
+      setAccounts((prev) => prev.map((a) => a.account_id === accountId
+        ? { ...a, backfill_status: data.status, backfill_progress: data.progress, backfill_total: data.total ?? null }
+        : a))
+    } catch (err: any) {
+      setStatus(err?.message || 'Network error starting backfill.')
+    }
+  }
+
+  const undoBackfill = async (accountId: string) => {
+    setCancelingBackfill(true)
+    setAccounts((prev) => prev.map((a) => a.account_id === accountId
+      ? { ...a, backfill_status: 'canceling' }
+      : a))
+    try {
+      const res = await fetch('/api/mirroring/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, action: 'undo' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setStatus(data?.error || 'Could not undo backfill.')
+      }
+    } finally {
+      setCancelingBackfill(false)
+    }
   }
 
   const cancelBackfillConfirmed = async (accountId: string) => {

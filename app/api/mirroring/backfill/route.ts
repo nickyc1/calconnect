@@ -4,53 +4,63 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { googleAuth } from '@/lib/google-auth';
 import { googleCalendar } from '@/lib/google-calendar';
 import { CalendarSyncService } from '@/lib/calendar-sync';
+import { withRetry } from '@/utils/retry';
 
 /**
- * Pro-only backfill: mirror events that already exist on a source calendar.
+ * Pro-only backfill v2 — rebuilt 2026-08-03 after the multi-source cascade
+ * incident. Every change here traces back to a specific failure mode:
+ *
+ *   1. Cascade prevention — the loop now skips events tagged calconnect_is_mirror.
+ *      Without this, source B's push mirrors get re-mirrored by source A's backfill
+ *      and the whole thing amplifies exponentially.
+ *
+ *   2. Serialization — a user can only run ONE backfill at a time across all their
+ *      sources. Enforced by refusing 'enable' if any of the user's other sources
+ *      has backfill_status IN ('running', 'canceling'). Yesterday every source ran
+ *      concurrently; that's what turned a bug into a disaster.
+ *
+ *   3. 1-year default horizon — was 5 years, which multiplied every problem by 5.
+ *      Column backfill_horizon_years is a per-source setting the user picks in the
+ *      preview modal.
+ *
+ *   4. Reliable delete — cleanup uses withRetry on Google delete calls, only marks
+ *      a mapping as removed after Google confirms. Failures stay in the DB so a
+ *      retry pass or the orphan-purge endpoint can pick them up.
+ *
+ *   5. Beta gate — the feature is only visible to users with
+ *      user_billing.mirror_existing_beta=true during canary rollout.
  *
  * Contract:
- *   POST { accountId, action: 'enable' }  → set enabled=true, run first chunk
- *   POST { accountId, action: 'tick' }    → process next chunk, return progress
- *   POST { accountId, action: 'disable' } → delete via_backfill mirrors, set enabled=false
- *   GET  ?accountId=X                     → current status (poll this every 2-3s)
- *
- * Chunked processing (max 50 events per tick) keeps each request under
- * Vercel's function timeout while giving the client real-time progress.
- *
- * Idempotency:
- *   - event_mappings has UNIQUE(user_id, source_event_id, source_calendar_id)
- *   - createMirrorEvents skips events with an existing mapping
- *   - Rerunning the backfill is safe (won't create duplicates)
- *
- * Cancellation:
- *   - action:'disable' sets status='canceled' and deletes via_backfill mirrors
- *   - Any in-flight tick completes but future ticks are rejected
+ *   POST { accountId, action: 'enable', horizonYears? } → begin backfill
+ *   POST { accountId, action: 'tick' }                  → process next chunk
+ *   POST { accountId, action: 'disable' }               → chunked cleanup
+ *   POST { accountId, action: 'undo' }                  → 24h post-completion undo
+ *   GET  ?accountId=X                                   → current status
  */
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const CHUNK_SIZE = 50;
-// 5-year horizon for backfill. Anything past that is unlikely to be a real
-// event that needs a Busy block; keeps runtime bounded for wild recurring rules.
-const HORIZON_YEARS = 5;
+const CHUNK_SIZE = 40;
+const DISABLE_CHUNK = 30;
+const UNDO_WINDOW_HOURS = 24;
 
 const syncService = new CalendarSyncService();
 
-async function requirePro(userId: string): Promise<boolean> {
+async function getBilling(userId: string) {
   const { data } = await (supabaseAdmin as any)
     .from('user_billing')
-    .select('plan')
+    .select('plan, mirror_existing_beta, mirror_dedupe_enabled')
     .eq('user_id', userId)
     .maybeSingle();
-  return (data as any)?.plan === 'pro';
+  return data;
 }
 
 async function getSourceAccount(userId: string, accountId: string) {
   const { data } = await (supabaseAdmin as any)
     .from('user_accounts')
-    .select('id, account_id, google_email, is_active, is_source_account, backfill_status, backfill_progress, backfill_total, backfill_cursor, backfill_started_at, mirror_existing_enabled')
+    .select('id, account_id, google_email, is_active, is_source_account, backfill_status, backfill_progress, backfill_total, backfill_cursor, backfill_started_at, backfill_completed_at, backfill_horizon_years, mirror_existing_enabled')
     .eq('user_id', userId)
     .eq('account_id', accountId)
     .maybeSingle();
@@ -67,6 +77,20 @@ async function getDestAccounts(userId: string, excludeAccountId: string) {
   return (data as any[]) || [];
 }
 
+/**
+ * Returns account_ids of any other source belonging to this user that is
+ * currently in a state that should block starting a new backfill.
+ */
+async function findConflictingBackfills(userId: string, excludeAccountId: string): Promise<string[]> {
+  const { data } = await (supabaseAdmin as any)
+    .from('user_accounts')
+    .select('account_id')
+    .eq('user_id', userId)
+    .in('backfill_status', ['running', 'canceling'])
+    .neq('account_id', excludeAccountId);
+  return ((data as any[]) || []).map((r) => r.account_id);
+}
+
 export async function GET(req: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -78,12 +102,19 @@ export async function GET(req: NextRequest) {
   const acct = await getSourceAccount(user.id, accountId);
   if (!acct) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
 
+  const undoDeadline = (acct as any).backfill_completed_at
+    ? new Date(new Date((acct as any).backfill_completed_at).getTime() + UNDO_WINDOW_HOURS * 3600_000).toISOString()
+    : null;
+
   return NextResponse.json({
     enabled: (acct as any).mirror_existing_enabled,
     status: (acct as any).backfill_status,
     progress: (acct as any).backfill_progress,
     total: (acct as any).backfill_total,
     startedAt: (acct as any).backfill_started_at,
+    completedAt: (acct as any).backfill_completed_at,
+    undoDeadline,
+    horizonYears: (acct as any).backfill_horizon_years || 1,
   });
 }
 
@@ -95,13 +126,18 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const accountId: string | undefined = body?.accountId;
   const action: string | undefined = body?.action;
-  if (!accountId || !['enable', 'disable', 'tick'].includes(action || '')) {
+  const horizonYears: number = Math.max(1, Math.min(5, Number(body?.horizonYears) || 1));
+
+  if (!accountId || !['enable', 'disable', 'tick', 'undo'].includes(action || '')) {
     return NextResponse.json({ error: 'accountId + valid action required' }, { status: 400 });
   }
 
-  const isPro = await requirePro(user.id);
-  if (!isPro) {
+  const billing = await getBilling(user.id);
+  if (!billing || (billing as any).plan !== 'pro') {
     return NextResponse.json({ error: 'Mirroring existing events is a Pro feature.' }, { status: 402 });
+  }
+  if (!(billing as any).mirror_existing_beta) {
+    return NextResponse.json({ error: 'This feature is in beta. Contact support to opt in.' }, { status: 403 });
   }
 
   const acct = await getSourceAccount(user.id, accountId);
@@ -109,23 +145,62 @@ export async function POST(req: NextRequest) {
 
   const acctRow = acct as any;
 
-  // === disable: chunked delete of backfill mirrors + cascade duplicates ===
-  // Vercel's 60s timeout can't handle thousands of Google API deletes in one
-  // call, so we chunk this. First call sets status='canceling'; subsequent
-  // calls delete DISABLE_CHUNK mappings at a time. When there are none left,
-  // status flips to 'canceled'. The client polls just like it does for ticks.
-  //
-  // We delete two categories of mappings:
-  //   1. via_backfill=true — mirrors WE created during backfill
-  //   2. mappings with created_at >= backfill_started_at (cascade duplicates
-  //      created by webhooks while the backfill was running — same session,
-  //      same accident, same cleanup)
-  // Either way we NEVER touch the source calendar; we only delete events on
-  // destination calendars that our own row (mirrored_events) points at.
-  if (action === 'disable') {
-    const DISABLE_CHUNK = 40;
+  // ============================================================
+  // enable — begin a new backfill. Enforces serialization.
+  // ============================================================
+  if (action === 'enable') {
+    const conflicts = await findConflictingBackfills(user.id, accountId);
+    if (conflicts.length > 0) {
+      return NextResponse.json({
+        error: `Another backfill is already running (${conflicts.join(', ')}). Wait for it to finish or cancel it first.`,
+        conflicts,
+      }, { status: 409 });
+    }
 
-    // First call: mark canceling and blow away the run so ticks stop.
+    await (supabaseAdmin as any)
+      .from('user_accounts')
+      .update({
+        mirror_existing_enabled: true,
+        backfill_status: 'running',
+        backfill_progress: 0,
+        backfill_total: null,
+        backfill_cursor: null,
+        backfill_started_at: new Date().toISOString(),
+        backfill_completed_at: null,
+        backfill_error: null,
+        backfill_horizon_years: horizonYears,
+      })
+      .eq('account_id', accountId)
+      .eq('user_id', user.id);
+
+    return NextResponse.json({ ok: true, status: 'running', progress: 0, total: null });
+  }
+
+  // ============================================================
+  // undo — 24h post-completion cleanup, ONE atomic entry point
+  // ============================================================
+  if (action === 'undo') {
+    if (!acctRow.backfill_completed_at) {
+      return NextResponse.json({ error: 'No completed backfill to undo for this source.' }, { status: 400 });
+    }
+    const completed = new Date(acctRow.backfill_completed_at);
+    const expiresAt = new Date(completed.getTime() + UNDO_WINDOW_HOURS * 3600_000);
+    if (Date.now() > expiresAt.getTime()) {
+      return NextResponse.json({ error: 'Undo window has expired (24h after completion).' }, { status: 410 });
+    }
+    // Flip to canceling; the chunked disable path (below) drives cleanup.
+    await (supabaseAdmin as any)
+      .from('user_accounts')
+      .update({ backfill_status: 'canceling', mirror_existing_enabled: false })
+      .eq('account_id', accountId)
+      .eq('user_id', user.id);
+    return NextResponse.json({ ok: true, status: 'canceling' });
+  }
+
+  // ============================================================
+  // disable — chunked cleanup with reliable delete
+  // ============================================================
+  if (action === 'disable') {
     if (acctRow.backfill_status !== 'canceling') {
       await (supabaseAdmin as any)
         .from('user_accounts')
@@ -139,10 +214,8 @@ export async function POST(req: NextRequest) {
         .eq('user_id', user.id);
     }
 
-    const cancelFloor = acctRow.backfill_started_at || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const cancelFloor = acctRow.backfill_started_at || new Date(Date.now() - 24 * 3600_000).toISOString();
 
-    // Grab one chunk: via_backfill=true OR (source_account=X AND created_at >= floor).
-    // A single .or() clause covers both without a second query.
     const { data: mappings } = await (supabaseAdmin as any)
       .from('event_mappings')
       .select('id, mirrored_events, via_backfill, created_at')
@@ -153,20 +226,46 @@ export async function POST(req: NextRequest) {
 
     const rows = (mappings as any[]) || [];
     let deleted = 0;
+    let failed = 0;
+
     for (const row of rows) {
+      // Track whether EVERY mirror event was successfully deleted before we
+      // remove the mapping row. If any fail, keep the row so a retry pass
+      // can find it — yesterday's bug was removing the row eagerly and
+      // orphaning the Google event forever.
+      let allDeleted = true;
       for (const mirror of (row.mirrored_events as any[]) || []) {
         try {
           const auth = await googleAuth.getClientByAccountId(user.id, mirror.account_id);
-          await googleCalendar.deleteEvent(auth, mirror.calendar_id || 'primary', mirror.event_id);
+          await withRetry(
+            () => googleCalendar.deleteEvent(auth, mirror.calendar_id || 'primary', mirror.event_id),
+            {
+              maxRetries: 3,
+              backoffMs: 500,
+              shouldRetry: (err: any) => {
+                const s = err?.code || err?.status;
+                if (s === 404 || s === 410) return false; // already gone, treat as success
+                return s === 429 || (s >= 500 && s < 600);
+              },
+            },
+          );
           deleted++;
-        } catch (err) {
-          console.warn(`backfill/disable: failed to delete mirror ${mirror.event_id}`, err);
+        } catch (err: any) {
+          const s = err?.code || err?.status;
+          if (s === 404 || s === 410) {
+            deleted++;
+            continue;
+          }
+          console.warn(`disable: failed to delete mirror ${mirror.event_id}`, err?.message);
+          failed++;
+          allDeleted = false;
         }
       }
-      await (supabaseAdmin as any).from('event_mappings').delete().eq('id', row.id);
+      if (allDeleted) {
+        await (supabaseAdmin as any).from('event_mappings').delete().eq('id', row.id);
+      }
     }
 
-    // Are there more mappings still to clean up?
     const { count: remaining } = await (supabaseAdmin as any)
       .from('event_mappings')
       .select('id', { count: 'exact', head: true })
@@ -184,6 +283,7 @@ export async function POST(req: NextRequest) {
           backfill_total: null,
           backfill_cursor: null,
           backfill_started_at: null,
+          backfill_completed_at: null,
         })
         .eq('account_id', accountId)
         .eq('user_id', user.id);
@@ -193,44 +293,31 @@ export async function POST(req: NextRequest) {
       ok: true,
       status: done ? 'canceled' : 'canceling',
       deleted,
+      failed,
       remaining: remaining || 0,
     });
   }
 
-  // === enable: kick off a fresh backfill (or restart if previously canceled) ===
-  if (action === 'enable') {
+  // ============================================================
+  // tick — process one chunk of source events
+  // ============================================================
+  if (acctRow.backfill_status !== 'running') {
+    return NextResponse.json({
+      ok: true,
+      status: acctRow.backfill_status,
+      progress: acctRow.backfill_progress,
+      total: acctRow.backfill_total,
+    });
+  }
+
+  const dests = await getDestAccounts(user.id, accountId);
+  if (dests.length === 0) {
     await (supabaseAdmin as any)
       .from('user_accounts')
       .update({
-        mirror_existing_enabled: true,
-        backfill_status: 'running',
-        backfill_progress: 0,
-        backfill_total: null,
-        backfill_cursor: null,
-        backfill_started_at: new Date().toISOString(),
-        backfill_error: null,
+        backfill_status: 'complete',
+        backfill_completed_at: new Date().toISOString(),
       })
-      .eq('account_id', accountId)
-      .eq('user_id', user.id);
-    // Fall through to process first chunk immediately
-  } else if (action === 'tick') {
-    if (acctRow.backfill_status !== 'running') {
-      return NextResponse.json({
-        ok: true,
-        status: acctRow.backfill_status,
-        progress: acctRow.backfill_progress,
-        total: acctRow.backfill_total,
-      });
-    }
-  }
-
-  // === process one chunk ===
-  const dests = await getDestAccounts(user.id, accountId);
-  if (dests.length === 0) {
-    // No target calendars — nothing to backfill.
-    await (supabaseAdmin as any)
-      .from('user_accounts')
-      .update({ backfill_status: 'complete' })
       .eq('account_id', accountId)
       .eq('user_id', user.id);
     return NextResponse.json({ ok: true, status: 'complete', progress: 0, total: 0 });
@@ -248,14 +335,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Auth failed for source calendar' }, { status: 500 });
   }
 
+  const horizon = new Date();
+  horizon.setFullYear(horizon.getFullYear() + (acctRow.backfill_horizon_years || 1));
   const now = new Date();
-  const horizon = new Date(now);
-  horizon.setFullYear(now.getFullYear() + HORIZON_YEARS);
 
-  // Get the currently-saved cursor for pagination
   const currentCursor = (await getSourceAccount(user.id, accountId) as any)?.backfill_cursor || undefined;
 
-  // Fetch a page of events
   let events: any[] = [];
   let nextPageToken: string | undefined;
   try {
@@ -278,18 +363,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to list events' }, { status: 500 });
   }
 
-  // Mirror each event via the existing sync engine. Passing viaBackfill=true
-  // tags the resulting event_mappings so we can find and delete them cleanly
-  // if the user disables the backfill.
   let processed = 0;
+  let skippedMirror = 0;
   for (const ev of events) {
     if (ev.status === 'cancelled') continue;
-    // CRITICAL: never re-mirror our own mirror events. Without this guard,
-    // multi-source setups cascade — source B's push-notification mirrors on
-    // source A get read here, mirrored to C and back to B, and the whole
-    // system blows up with thousands of duplicate Busy blocks. The webhook
-    // already skips these; backfill needs the same guard.
     if ((ev as any).extendedProperties?.private?.calconnect_is_mirror === 'true') {
+      skippedMirror++;
       continue;
     }
     try {
@@ -300,30 +379,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Update state. If no nextPageToken, we're done.
-  // CRITICAL: only write back if status is STILL 'running'. A tick call can
-  // take 5-10s to process a chunk; during that window the user may have
-  // clicked Cancel, which flipped the status to 'canceling'. Without this
-  // guard, the tick's final update would overwrite 'canceling' with 'running'
-  // and the row would flicker back and forth until the user gave up.
   const newProgress = acctRow.backfill_progress + processed;
   const done = !nextPageToken;
+  const updates: any = {
+    backfill_status: done ? 'complete' : 'running',
+    backfill_progress: newProgress,
+    backfill_cursor: nextPageToken || null,
+    backfill_total: done ? newProgress : null,
+  };
+  if (done) updates.backfill_completed_at = new Date().toISOString();
+
   const { data: updated } = await (supabaseAdmin as any)
     .from('user_accounts')
-    .update({
-      backfill_status: done ? 'complete' : 'running',
-      backfill_progress: newProgress,
-      backfill_cursor: nextPageToken || null,
-      backfill_total: done ? newProgress : null,
-    })
+    .update(updates)
     .eq('account_id', accountId)
     .eq('user_id', user.id)
     .eq('backfill_status', 'running')
     .select('backfill_status, backfill_progress, backfill_total')
     .maybeSingle();
 
-  // If the row didn't update (status changed under us), return the CURRENT
-  // truth so the client stops flipping.
   if (!updated) {
     const fresh = await getSourceAccount(user.id, accountId) as any;
     return NextResponse.json({
@@ -340,5 +414,6 @@ export async function POST(req: NextRequest) {
     progress: newProgress,
     total: done ? newProgress : null,
     chunkProcessed: processed,
+    skippedMirror,
   });
 }
