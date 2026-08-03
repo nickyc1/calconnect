@@ -12,14 +12,14 @@ import { useSearchParams } from 'next/navigation'
  */
 function AnimatedDots() {
   return (
-    <span style={{ display: 'inline-block', width: '1.2em' }}>
+    <span style={{ display: 'inline-block', width: '1.4em', fontWeight: 700, letterSpacing: '1px' }}>
       <style>{`
-        @keyframes cc-dot { 0%, 20% { opacity: 0.2 } 50% { opacity: 1 } 100% { opacity: 0.2 } }
-        .cc-dot { animation: cc-dot 1.2s infinite; }
+        @keyframes cc-dot { 0%, 20% { opacity: 0 } 50% { opacity: 1 } 100% { opacity: 0 } }
+        .cc-dot { animation: cc-dot 1.4s infinite; display: inline-block; }
       `}</style>
       <span className="cc-dot" style={{ animationDelay: '0s' }}>.</span>
-      <span className="cc-dot" style={{ animationDelay: '0.2s' }}>.</span>
-      <span className="cc-dot" style={{ animationDelay: '0.4s' }}>.</span>
+      <span className="cc-dot" style={{ animationDelay: '0.25s' }}>.</span>
+      <span className="cc-dot" style={{ animationDelay: '0.5s' }}>.</span>
     </span>
   )
 }
@@ -1495,7 +1495,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => startBackfillConfirmed(acct.account_id)}
                       disabled={previewLoading}
-                      style={{ background: '#14140f', color: '#f7f5ee', border: 'none', borderRadius: 6, padding: '0.55rem 1.2rem', fontSize: '0.9rem', fontWeight: 500, cursor: previewLoading ? 'not-allowed' : 'pointer', opacity: previewLoading ? 0.6 : 1 }}
+                      style={{ background: '#1e7a3a', color: 'white', border: 'none', borderRadius: 6, padding: '0.6rem 1.4rem', fontSize: '0.95rem', fontWeight: 700, cursor: previewLoading ? 'not-allowed' : 'pointer', opacity: previewLoading ? 0.5 : 1, boxShadow: previewLoading ? 'none' : '0 2px 8px rgba(30,122,58,0.25)' }}
                     >
                       Yes, start mirroring
                     </button>
