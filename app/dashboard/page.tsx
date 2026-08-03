@@ -1105,17 +1105,23 @@ export default function DashboardPage() {
                         {/* Row: Backfill existing events — button-driven with modal */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap', color: '#4a4a45' }}>
                           {backfillStatus === 'idle' || backfillStatus === 'canceled' ? (
-                            <button
-                              type="button"
-                              onClick={() => openBackfillPreview(account.account_id)}
-                              style={{
-                                background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
-                                padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
-                                cursor: 'pointer', fontFamily: 'inherit',
-                              }}
-                            >
-                              Mirror existing events →
-                            </button>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <button
+                                type="button"
+                                onClick={() => openBackfillPreview(account.account_id)}
+                                style={{
+                                  background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
+                                  padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
+                                  cursor: 'pointer', fontFamily: 'inherit',
+                                }}
+                              >
+                                Mirror existing events →
+                              </button>
+                              <span className="cc-tooltip">
+                                <span className="cc-tooltip-trigger">?</span>
+                                <span className="cc-tooltip-bubble">Mirrors events already on this calendar to your other connected calendars as Busy blocks.</span>
+                              </span>
+                            </span>
                           ) : backfillRunning ? (
                             <>
                               <span style={{ color: '#1e5f22', fontWeight: 500 }}>
