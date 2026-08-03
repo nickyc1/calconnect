@@ -762,17 +762,23 @@ export default function DashboardPage() {
       </div>
 
       {/* Status Message */}
-      {status && (
-        <div style={{
-          padding: '1rem',
-          background: status.includes('Error') ? '#fee' : '#efe',
-          color: status.includes('Error') ? '#c00' : '#060',
-          borderRadius: '4px',
-          marginBottom: '1rem'
-        }}>
-          {status}
-        </div>
-      )}
+      {status && (() => {
+        // Trim a trailing static ellipsis so we can substitute an animated one
+        // when the message is describing an in-progress action.
+        const trimmed = status.replace(/[.…]+$/, '')
+        const inProgress = /\.\.\.$|…$/.test(status)
+        return (
+          <div style={{
+            padding: '1rem',
+            background: status.includes('Error') ? '#fee' : '#efe',
+            color: status.includes('Error') ? '#c00' : '#060',
+            borderRadius: '4px',
+            marginBottom: '1rem',
+          }}>
+            {inProgress ? <>{trimmed}<AnimatedDots /></> : status}
+          </div>
+        )
+      })()}
 
       {/* Connected Accounts */}
       <div style={{
@@ -847,6 +853,67 @@ export default function DashboardPage() {
                       SOURCE
                     </span>
                   )}
+                  {/* Live-status pill. Green pulsing dot = this calendar's
+                      events are actively being mirrored elsewhere. Gray dot
+                      = calendar isn't a source but IS receiving mirrors from
+                      other sources you have connected. Nothing when there
+                      are no sources at all — no signal to show. */}
+                  {(() => {
+                    const otherSourcesExist = accounts.some(a => a.is_source_account && a.account_id !== account.account_id)
+                    if (account.is_source_account) {
+                      return (
+                        <span style={{
+                          marginLeft: '0.5rem',
+                          padding: '0.2rem 0.55rem 0.2rem 0.45rem',
+                          background: '#e8f5ea',
+                          color: '#1e5f22',
+                          borderRadius: 999,
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          border: '1px solid #b8dcbb',
+                          verticalAlign: 'middle',
+                        }}>
+                          <style>{`@keyframes cc-live-pulse { 0% { box-shadow: 0 0 0 0 rgba(30,122,58,0.6) } 70% { box-shadow: 0 0 0 6px rgba(30,122,58,0) } 100% { box-shadow: 0 0 0 0 rgba(30,122,58,0) } }`}</style>
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: '#1e7a3a',
+                            animation: 'cc-live-pulse 1.6s infinite',
+                            display: 'inline-block',
+                          }} />
+                          LIVE
+                        </span>
+                      )
+                    }
+                    if (otherSourcesExist) {
+                      return (
+                        <span style={{
+                          marginLeft: '0.5rem',
+                          padding: '0.2rem 0.55rem 0.2rem 0.45rem',
+                          background: '#f2f2ee',
+                          color: '#8a887f',
+                          borderRadius: 999,
+                          fontSize: '0.72rem',
+                          fontWeight: 500,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          border: '1px solid #dcdad3',
+                          verticalAlign: 'middle',
+                        }}>
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: '#a8a69c',
+                            display: 'inline-block',
+                          }} />
+                          RECEIVING
+                        </span>
+                      )
+                    }
+                    return null
+                  })()}
                   {account.needs_reauth && (
                     <span style={{
                       marginLeft: '0.5rem',
@@ -1105,29 +1172,23 @@ export default function DashboardPage() {
                         {/* Row: Backfill existing events — button-driven with modal */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap', color: '#4a4a45' }}>
                           {backfillStatus === 'idle' || backfillStatus === 'canceled' ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                              <span style={{ fontSize: '0.75rem', color: '#1e5f22', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontWeight: 700 }}>✓</span>
-                                Mirroring new events automatically as they're added
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <button
+                                type="button"
+                                onClick={() => openBackfillPreview(account.account_id)}
+                                style={{
+                                  background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
+                                  padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
+                                  cursor: 'pointer', fontFamily: 'inherit',
+                                }}
+                              >
+                                Mirror existing events →
+                              </button>
+                              <span className="cc-tooltip">
+                                <span className="cc-tooltip-trigger">?</span>
+                                <span className="cc-tooltip-bubble">One-time backfill of events already on this calendar.</span>
                               </span>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <button
-                                  type="button"
-                                  onClick={() => openBackfillPreview(account.account_id)}
-                                  style={{
-                                    background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
-                                    padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
-                                    cursor: 'pointer', fontFamily: 'inherit',
-                                  }}
-                                >
-                                  Mirror existing events →
-                                </button>
-                                <span className="cc-tooltip">
-                                  <span className="cc-tooltip-trigger">?</span>
-                                  <span className="cc-tooltip-bubble">One-time backfill of events already on this calendar.</span>
-                                </span>
-                              </span>
-                            </div>
+                            </span>
                           ) : backfillRunning ? (
                             <>
                               <span style={{ color: '#1e5f22', fontWeight: 500 }}>
