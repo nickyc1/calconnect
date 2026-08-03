@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
 
   const accountId = req.nextUrl.searchParams.get('accountId');
   const sinceIso = req.nextUrl.searchParams.get('sinceIso');
+  const beforeIso = req.nextUrl.searchParams.get('beforeIso');
   const pageToken = req.nextUrl.searchParams.get('pageToken') || undefined;
   if (!accountId || !sinceIso) {
     return NextResponse.json({ error: 'accountId and sinceIso required' }, { status: 400 });
@@ -47,6 +48,10 @@ export async function POST(req: NextRequest) {
   const sinceDate = new Date(sinceIso);
   if (isNaN(sinceDate.getTime())) {
     return NextResponse.json({ error: 'sinceIso not a valid date' }, { status: 400 });
+  }
+  const beforeDate = beforeIso ? new Date(beforeIso) : null;
+  if (beforeDate && isNaN(beforeDate.getTime())) {
+    return NextResponse.json({ error: 'beforeIso not a valid date' }, { status: 400 });
   }
 
   const { data: acct } = await (supabaseAdmin as any)
@@ -79,6 +84,7 @@ export async function POST(req: NextRequest) {
 
   let deleted = 0;
   let skippedOld = 0;
+  let skippedNewer = 0;
   let failed = 0;
   for (const ev of items) {
     if (!ev.id) continue;
@@ -87,12 +93,15 @@ export async function POST(req: NextRequest) {
       skippedOld++;
       continue;
     }
+    if (created && beforeDate && created >= beforeDate) {
+      skippedNewer++;
+      continue;
+    }
     try {
       await calendar.events.delete({ calendarId: 'primary', eventId: ev.id });
       deleted++;
     } catch (err: any) {
       if (err?.code === 410 || err?.code === 404) {
-        // Already gone — treat as deleted for counting purposes.
         deleted++;
       } else {
         console.warn(`purge-orphans: failed to delete ${ev.id}`, err?.message);
@@ -101,19 +110,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Also blow away event_mappings rows for events created since sinceIso
+  // Also blow away event_mappings rows for events created in the same window
   // from this source, so the DB matches reality after the purge.
-  await (supabaseAdmin as any)
+  let mapDel = (supabaseAdmin as any)
     .from('event_mappings')
     .delete()
     .eq('user_id', user.id)
     .eq('source_account_id', accountId)
     .gte('created_at', sinceIso);
+  if (beforeIso) mapDel = mapDel.lt('created_at', beforeIso);
+  await mapDel;
 
   return NextResponse.json({
     ok: true,
     deleted,
     skippedOld,
+    skippedNewer,
     failed,
     nextPageToken: list.nextPageToken || null,
     done: !list.nextPageToken,
