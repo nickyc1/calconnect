@@ -1573,8 +1573,8 @@ export default function DashboardPage() {
                   </h3>
                   <p style={{ margin: '0 0 1.25rem', color: '#4a4a45', fontSize: '0.95rem', lineHeight: 1.5 }}>
                     {acct.backfill_status === 'complete'
-                      ? `This will delete the ${acct.backfill_progress || 0} "Busy" blocks CalConnect created from your existing events. New events (going forward) will continue to mirror as normal.`
-                      : `This will stop the backfill and delete the ${acct.backfill_progress || 0} "Busy" blocks CalConnect has created so far. New events (going forward) will continue to mirror as normal. Your source calendar is untouched.`}
+                      ? 'This will stop the backfill and remove all "Busy" blocks CalConnect created from this source. New events on this calendar will continue to mirror automatically. Your source calendar is never modified.'
+                      : 'This will stop the backfill and remove all "Busy" blocks CalConnect has created from this source. New events on this calendar will continue to mirror automatically. Your source calendar is never modified.'}
                   </p>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <button
