@@ -240,8 +240,13 @@ export async function POST(req: NextRequest) {
           await withRetry(
             () => googleCalendar.deleteEvent(auth, mirror.calendar_id || 'primary', mirror.event_id),
             {
-              maxRetries: 3,
-              backoffMs: 500,
+              // 5 attempts × 2s backoff (compounding) can absorb the typical
+              // Google rate-limit spike on the first cancel cycle without
+              // needing a second manual re-cancel from the user. Previously
+              // 3 × 500ms wasn't enough and orphans piled up when the burst
+              // exceeded Google's per-second delete budget.
+              maxRetries: 5,
+              backoffMs: 2000,
               shouldRetry: (err: any) => {
                 const s = err?.code || err?.status;
                 if (s === 404 || s === 410) return false; // already gone, treat as success
