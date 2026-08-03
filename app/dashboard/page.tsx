@@ -963,13 +963,6 @@ export default function DashboardPage() {
                         )
                       })}
                     </div>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      color: mirrorSaved === account.account_id ? '#0e6b2f' : '#999',
-                      minWidth: 60,
-                    }}>
-                      {savingThis ? 'Saving…' : (mirrorSaved === account.account_id ? 'Saved' : '')}
-                    </span>
                     </div>
 
                     {/* Pro-only settings: mirror window + backfill */}
