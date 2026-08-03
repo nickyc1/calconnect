@@ -841,49 +841,37 @@ export default function DashboardPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <strong>{account.google_email || account.account_display_name || account.account_id}</strong>
-                  {account.is_source_account && (
-                    <span style={{
-                      marginLeft: '0.5rem',
-                      padding: '0.25rem 0.5rem',
-                      background: '#4285f4',
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem'
-                    }}>
-                      SOURCE
-                    </span>
-                  )}
-                  {/* Live-status pill. Green pulsing dot = this calendar's
-                      events are actively being mirrored elsewhere. Gray dot
-                      = calendar isn't a source but IS receiving mirrors from
-                      other sources you have connected. Nothing when there
-                      are no sources at all — no signal to show. */}
+                  {/* Merged SOURCE+LIVE pill (blue, pulsing dot) when this
+                      calendar IS a source, or a gray RECEIVING pill when it
+                      isn't a source but other sources are sending to it.
+                      Blue matches the Source checkbox tick color so the
+                      relationship is visually obvious. */}
                   {(() => {
                     const otherSourcesExist = accounts.some(a => a.is_source_account && a.account_id !== account.account_id)
                     if (account.is_source_account) {
                       return (
                         <span style={{
                           marginLeft: '0.5rem',
-                          padding: '0.2rem 0.55rem 0.2rem 0.45rem',
-                          background: '#e8f5ea',
-                          color: '#1e5f22',
-                          borderRadius: 999,
+                          padding: '0.28rem 0.6rem 0.28rem 0.5rem',
+                          background: '#4285f4',
+                          color: 'white',
+                          borderRadius: 6,
                           fontSize: '0.72rem',
                           fontWeight: 600,
+                          letterSpacing: '0.03em',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 5,
-                          border: '1px solid #b8dcbb',
+                          gap: 6,
                           verticalAlign: 'middle',
                         }}>
-                          <style>{`@keyframes cc-live-pulse { 0% { box-shadow: 0 0 0 0 rgba(30,122,58,0.6) } 70% { box-shadow: 0 0 0 6px rgba(30,122,58,0) } 100% { box-shadow: 0 0 0 0 rgba(30,122,58,0) } }`}</style>
+                          <style>{`@keyframes cc-live-pulse-w { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.9) } 70% { box-shadow: 0 0 0 5px rgba(255,255,255,0) } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0) } }`}</style>
                           <span style={{
                             width: 7, height: 7, borderRadius: '50%',
-                            background: '#1e7a3a',
-                            animation: 'cc-live-pulse 1.6s infinite',
+                            background: 'white',
+                            animation: 'cc-live-pulse-w 1.6s infinite',
                             display: 'inline-block',
                           }} />
-                          LIVE
+                          SOURCE
                         </span>
                       )
                     }
@@ -891,15 +879,16 @@ export default function DashboardPage() {
                       return (
                         <span style={{
                           marginLeft: '0.5rem',
-                          padding: '0.2rem 0.55rem 0.2rem 0.45rem',
+                          padding: '0.28rem 0.6rem 0.28rem 0.5rem',
                           background: '#f2f2ee',
                           color: '#8a887f',
-                          borderRadius: 999,
+                          borderRadius: 6,
                           fontSize: '0.72rem',
                           fontWeight: 500,
+                          letterSpacing: '0.03em',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 5,
+                          gap: 6,
                           border: '1px solid #dcdad3',
                           verticalAlign: 'middle',
                         }}>
