@@ -1,210 +1,82 @@
-# CalConnect Backend
+# CalConnect
 
-Multi-tenant calendar mirroring service using Pipedream Connect and Supabase.
+Mirror your busy blocks across Google Calendars without leaking event details.
 
-**Repository:** git@github.com:mh550/calconnect-backend.git
+Live at [calconnect.io](https://calconnect.io). Also on [AppSumo](https://appsumo.com/products/calconnect).
 
-## Quick Start
+## What it does
 
-### 1. Install Dependencies
+Point CalConnect at a source calendar. Every event on that calendar gets mirrored to your other connected Google Calendars as a private "Busy" block. Your teammates, your family, your booking pages all see the block. They never see the title, the attendees, the notes, the meeting link.
+
+- Real-time push sync via Google Calendar watch channels. New events show up on other calendars within seconds.
+- Recurring events expand cleanly. Cancel one instance on the source and the mirror updates.
+- Bidirectional. Any calendar can be a source, a destination, or both.
+- Multi-source. Add up to 10 Google accounts on the Pro plan.
+- Optional time and day windows. Only mirror between 9am and 5pm Monday to Friday, for example.
+- Optional backfill. Import events already on your calendar with one click.
+
+## Why it exists
+
+Every existing "hide my calendar" tool either uploads your event data to a third party, exposes titles, or costs $10 to $20 per user per month for a team-wide feature you only need for one person.
+
+CalConnect runs on push notifications from Google itself. The event never leaves Google's infrastructure except as a start time, an end time, and the label "Busy" on the destination calendar. Same visibility signal, none of the leakage.
+
+## Tech stack
+
+- **Next.js 14 (App Router) + TypeScript** for the app.
+- **Supabase (Postgres + Auth)** for storage and user auth. Row-level security everywhere, refresh tokens encrypted with pgcrypto.
+- **Google Calendar API** for reading events, creating mirror events, and receiving push notifications.
+- **Stripe** for subscription billing and metered add-on calendars.
+- **Vercel** for hosting and cron. All backend routes are serverless functions.
+- **AppSumo** for the LTD launch, with a /redeem flow tied to a plan-upgrade webhook.
+
+See [STACK.md](./STACK.md) for how it was built, the tools used, and the vibe-coding process behind it.
+
+## Local setup
+
 ```bash
+git clone https://github.com/nickyc1/calconnect.git
+cd calconnect
 npm install
-```
-
-### 2. Set Up Database
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Run migrations from `supabase/migrations/` in order:
-   - For new projects: Run both `001_initial_schema.sql` and `002_webhook_connect_flow.sql`
-   - For existing projects: Run only `002_webhook_connect_flow.sql`
-
-See [supabase/README.md](./supabase/README.md) for detailed instructions.
-
-### 3. Configure Environment
-```bash
 cp .env.example .env.local
-```
-
-Fill in your credentials:
-- **Pipedream**: Client ID, Secret, Project ID (from [pipedream.com/projects](https://pipedream.com/projects))
-- **Supabase**: URL, Anon Key, Service Role Key (from Project Settings → API)
-- **Webhook**: ngrok URL for local development
-
-### 4. Start Development Server
-```bash
+# fill in Supabase URL + keys, Google OAuth client, Stripe keys
 npm run dev
 ```
 
-Visit **http://localhost:3000** - redirects to login page or dashboard.
+The Supabase schema is in [supabase/migrations/](./supabase/migrations/). Run them in numeric order in the Supabase SQL editor.
 
-## Architecture
+You will also need:
 
-- **Next.js 14** - App Router for API endpoints
-- **Pipedream Connect** - Managed OAuth & API proxy
-- **Supabase** - PostgreSQL database
-- **TypeScript** - Type-safe development
+- A Google Cloud Console project with the Calendar API enabled and an OAuth 2.0 client (Web application, with your dev URL in Authorized redirect URIs).
+- A Stripe account in test mode with two subscription products (Basic and Pro) and a per-calendar add-on price.
+- A Supabase project. Free tier is fine for local dev.
 
-## Project Structure
+## Repository layout
 
 ```
-calconnect_backend/
-├── app/
-│   ├── api/
-│   │   ├── accounts/        # Account management endpoints
-│   │   ├── connect/         # Connect token & webhook callback
-│   │   ├── mirroring/       # Activate/deactivate mirroring
-│   │   ├── sources/         # Source listing
-│   │   └── webhook/         # Calendar event webhooks
-│   ├── auth/                # Supabase Auth routes
-│   ├── dashboard/           # User dashboard UI
-│   └── login/               # Login page
-├── lib/
-│   ├── pipedream.ts         # Pipedream SDK wrapper
-│   ├── supabase.ts          # Supabase client
-│   ├── supabase-server.ts   # Server-side Supabase client
-│   ├── calendar-sync.ts     # Mirror event logic
-│   └── types.ts             # TypeScript definitions
-├── middleware.ts            # Auth middleware
-├── supabase/
-│   └── migrations/          # Database migrations (001-005)
-└── docs/                    # Technical documentation
+app/                      Next.js App Router pages and API routes
+  api/mirroring/          Backfill, activate, disable endpoints
+  api/webhook/            Google Calendar push notifications land here
+  api/accounts/           Per-account config (color, label, mirror window)
+  api/redeem/             AppSumo code redemption
+  api/stripe/             Checkout + customer portal
+  dashboard/              The main app UI
+  onboarding/             New-user plan pick flow
+  redeem/                 AppSumo code entry
+lib/                      Shared server code
+  calendar-sync.ts        The sync engine (create/update/delete mirrors)
+  google-calendar.ts      Google Calendar API client
+  google-auth.ts          OAuth token refresh + encryption
+  mirror-window.ts        Time/day window overlap logic
+supabase/migrations/      Schema migrations in order (001..020+)
 ```
 
-## Local Development with Webhooks
+## Contributing
 
-### Using ngrok for Webhooks
+Not currently accepting outside PRs, this is a solo project running in production with paying customers. If you spot a bug or want to suggest something, open an issue.
 
-1. **Install ngrok**:
-   ```bash
-   # macOS/Linux
-   brew install ngrok
-
-   # Or download from https://ngrok.com/download
-   ```
-
-2. **Start ngrok tunnel**:
-   ```bash
-   ngrok http 3000
-   ```
-
-3. **Copy the forwarding URL** (e.g., `https://abc123.ngrok-free.dev`)
-
-4. **Update `.env.local`**:
-   ```env
-   WEBHOOK_BASE_URL=https://abc123.ngrok-free.dev
-   ```
-
-5. **Restart your dev server**
-
-### Testing Flow
-
-1. Go to http://localhost:3000 → redirects to `/login`
-2. Sign in with Google OAuth
-3. Connect 2-3 Google Calendar accounts
-4. Select one account as the "source"
-5. Click "Activate Mirroring"
-6. Create/delete events in source calendar
-7. Verify mirrors appear/disappear in destination calendars
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/connect/token` | POST | Generate Pipedream Connect token |
-| `/api/connect/callback` | POST | Webhook for account connections |
-| `/api/accounts` | GET | List user's connected accounts |
-| `/api/accounts/[id]/set-source` | POST | Set account as source |
-| `/api/sources` | GET | List user's deployed sources |
-| `/api/mirroring/activate` | POST | Deploy sources and start mirroring |
-| `/api/mirroring/deactivate` | POST | Remove sources and stop mirroring |
-| `/api/webhook` | POST | Receive calendar event notifications |
-
-## Documentation
-
-- **[Setup Guide](./docs/SETUP.md)** - Detailed setup instructions
-- **[Database Guide](./supabase/README.md)** - Database setup and migrations
-- **[SDK Fixes](./docs/SDK_CORRECTIONS.md)** - Pipedream SDK corrections
-- **[Maintenance](./docs/MAINTENANCE.md)** - Dependency maintenance notes
-
-## Development
-
-### Running Tests
-```bash
-npm test
-```
-
-### Building for Production
-```bash
-npm run build
-npm start
-```
-
-### Environment Variables
-
-Required in `.env.local`:
-
-```env
-# Pipedream Connect
-PIPEDREAM_CLIENT_ID=
-PIPEDREAM_CLIENT_SECRET=
-PIPEDREAM_PROJECT_ID=
-PIPEDREAM_ENVIRONMENT=development
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# Webhooks
-WEBHOOK_BASE_URL=  # ngrok URL for local dev
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-## Key Features
-
-✅ **Webhook-based account connection** - No manual Account ID copying
-✅ **Multi-account support** - Users can connect multiple Google Calendars
-✅ **Automated event mirroring** - Privacy-preserving "Busy" events
-✅ **Database migrations** - Version-controlled schema changes
-✅ **TypeScript** - Type-safe development
-
-## Implementation Status
-
-- [x] Infrastructure setup
-- [x] Database schema with migrations (001-005)
-- [x] Supabase Auth with Google OAuth
-- [x] Pipedream Connect integration
-- [x] Webhook-based account connection
-- [x] Multi-tenant user management
-- [x] Dashboard UI
-- [x] Source/destination account selection
-- [x] Mirroring activation/deactivation
-- [x] Event mirroring (create)
-- [x] Event deletion detection
-- [ ] Error handling and retry logic (in progress)
-- [ ] Production deployment
-
-## Troubleshooting
-
-### "Connect Link URL doesn't work"
-- Make sure you're using the `connectLinkUrl` from the API response
-- Append `&app=google_calendar` to the URL
-- Check that Pipedream project is in the correct environment (development/production)
-
-### "Webhook not receiving account connection"
-- Verify ngrok is running and URL is in `.env.local`
-- Check `WEBHOOK_BASE_URL` has no trailing slash
-- Look at server console for webhook POST logs
-- Check Supabase `connect_tokens` table has your token
-
-### "Database errors"
-- Run migrations in order (001, then 002)
-- Use `SUPABASE_SERVICE_ROLE_KEY`, not anon key
-- Check Supabase project is active and accessible
-
-See [docs/SETUP.md](./docs/SETUP.md) for more troubleshooting.
+If you want to fork this to build your own calendar tool, go for it. MIT-licensed.
 
 ## License
 
-Private - Client Project
+MIT. See [LICENSE](./LICENSE).
