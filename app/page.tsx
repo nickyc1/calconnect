@@ -424,7 +424,7 @@ export default async function Home() {
                   <li>All future updates included</li>
                   <li>Add calendars any time · $4/mo each</li>
                 </ul>
-                <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-plan-cta cc-v5-plan-cta-appsumo">Buy on AppSumo</a>
+                <a href="https://appsumo.com/products/calconnect?utm_source=calconnect_site&utm_medium=partner_referral" target="_blank" rel="noopener noreferrer" className="cc-v5-plan-cta cc-v5-plan-cta-appsumo">Buy on AppSumo</a>
               </div>
 
               {/* Card 2 — Basic monthly (featured) */}
@@ -511,7 +511,7 @@ export default async function Home() {
           <div className="cc-v5-closer">
             <h2>Stop double-booking <em>yourself.</em></h2>
             <p>Two calendars synchronized forever, for $9. Available now on AppSumo.</p>
-            <a href="https://appsumo.com/products/calconnect" target="_blank" rel="noopener noreferrer" className="cc-v5-btn cc-v5-btn-accent" style={{ padding: '12px 24px', fontSize: 15 }}>Get it on AppSumo →</a>
+            <a href="https://appsumo.com/products/calconnect?utm_source=calconnect_site&utm_medium=partner_referral" target="_blank" rel="noopener noreferrer" className="cc-v5-btn cc-v5-btn-accent" style={{ padding: '12px 24px', fontSize: 15 }}>Get it on AppSumo →</a>
           </div>
         </div>
 
