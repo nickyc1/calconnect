@@ -32,17 +32,20 @@ export async function GET(req: NextRequest) {
   const nickUserIds = Array.from(new Set(((nickUsers as any[]) || []).map((r) => r.user_id)));
   const excludeList = nickUserIds.length ? nickUserIds : ['00000000-0000-0000-0000-000000000000'];
 
-  // Pull every real user with plan + created_at
-  const { data: billing } = await (supabaseAdmin as any)
+  // Pull EVERY user_billing row and filter Nick's out in code.
+  // The .not('user_id', 'in', '(uuid1,uuid2)') PostgREST syntax needs UUIDs
+  // to be quoted a specific way that has bitten this file before — safer
+  // to just pull all rows and filter in JS since it's ~20 rows.
+  const nickSet = new Set(excludeList);
+  const { data: billingAll } = await (supabaseAdmin as any)
     .from('user_billing')
-    .select('user_id, plan, created_at')
-    .not('user_id', 'in', `(${excludeList.join(',')})`);
+    .select('user_id, plan, created_at');
+  const billing = ((billingAll as any[]) || []).filter((b) => !nickSet.has(b.user_id));
 
-  // Count calendars per user
-  const { data: accounts } = await (supabaseAdmin as any)
+  const { data: accountsAll } = await (supabaseAdmin as any)
     .from('user_accounts')
-    .select('user_id, is_source_account')
-    .not('user_id', 'in', `(${excludeList.join(',')})`);
+    .select('user_id, is_source_account');
+  const accounts = ((accountsAll as any[]) || []).filter((a) => !nickSet.has(a.user_id));
   const calendarCount: Record<string, number> = {};
   const sourceCount: Record<string, number> = {};
   for (const a of (accounts as any[]) || []) {
