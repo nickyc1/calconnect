@@ -37,9 +37,11 @@ export async function GET(req: NextRequest) {
   // to be quoted a specific way that has bitten this file before — safer
   // to just pull all rows and filter in JS since it's ~20 rows.
   const nickSet = new Set(excludeList);
+  // user_billing has updated_at but not created_at. Signup date comes from
+  // auth.users below via the admin SDK.
   const { data: billingAll } = await (supabaseAdmin as any)
     .from('user_billing')
-    .select('user_id, plan, created_at');
+    .select('user_id, plan, updated_at');
   const billing = ((billingAll as any[]) || []).filter((b) => !nickSet.has(b.user_id));
 
   const { data: accountsAll } = await (supabaseAdmin as any)
@@ -53,24 +55,16 @@ export async function GET(req: NextRequest) {
     if (a.is_source_account) sourceCount[a.user_id] = (sourceCount[a.user_id] || 0) + 1;
   }
 
-  // Emails come from auth.users
+  // Emails + real signup date come from auth.users via the admin SDK.
   const userIds = ((billing as any[]) || []).map((b) => b.user_id);
-  let emailByUserId: Record<string, string> = {};
-  if (userIds.length) {
-    const { data: authUsers } = await (supabaseAdmin as any)
-      .rpc('get_user_emails', { user_ids: userIds })
-      .then((r: any) => r, () => ({ data: null }));
-    if (authUsers) {
-      for (const u of authUsers as any[]) emailByUserId[u.id] = u.email;
-    } else {
-      // Fallback: read auth.users via admin SDK path
-      for (const uid of userIds) {
-        try {
-          const { data } = await (supabaseAdmin as any).auth.admin.getUserById(uid);
-          if (data?.user?.email) emailByUserId[uid] = data.user.email;
-        } catch {}
-      }
-    }
+  const emailByUserId: Record<string, string> = {};
+  const createdByUserId: Record<string, string> = {};
+  for (const uid of userIds) {
+    try {
+      const { data } = await (supabaseAdmin as any).auth.admin.getUserById(uid);
+      if (data?.user?.email) emailByUserId[uid] = data.user.email;
+      if (data?.user?.created_at) createdByUserId[uid] = data.user.created_at;
+    } catch {}
   }
 
   const now = Date.now();
@@ -78,8 +72,9 @@ export async function GET(req: NextRequest) {
     .map((b) => {
       const count = calendarCount[b.user_id] || 0;
       const sources = sourceCount[b.user_id] || 0;
-      const daysSinceSignup = b.created_at
-        ? Math.floor((now - new Date(b.created_at).getTime()) / (24 * 3600_000))
+      const created = createdByUserId[b.user_id] || null;
+      const daysSinceSignup = created
+        ? Math.floor((now - new Date(created).getTime()) / (24 * 3600_000))
         : null;
       return {
         email: emailByUserId[b.user_id] || null,
@@ -87,7 +82,7 @@ export async function GET(req: NextRequest) {
         connected_calendars: count,
         active_sources: sources,
         days_since_signup: daysSinceSignup,
-        signed_up_at: b.created_at,
+        signed_up_at: created,
       };
     })
     .filter((u) => u.connected_calendars < 2)
