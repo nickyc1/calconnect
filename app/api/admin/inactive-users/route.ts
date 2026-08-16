@@ -96,5 +96,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     inactive_count: inactive.length,
     users: inactive,
+    debug: {
+      billing_rows_after_nick_filter: billing.length,
+      accounts_rows_after_nick_filter: accounts.length,
+      unique_users_in_accounts: new Set(accounts.map((a: any) => a.user_id)).size,
+      users_with_2_plus_calendars: Object.values(calendarCount).filter((n: any) => n >= 2).length,
+      emails_resolved: Object.keys(emailByUserId).length,
+    },
   });
 }
