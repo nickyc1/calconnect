@@ -124,6 +124,74 @@ export async function GET(req: NextRequest) {
     .not('user_id', 'in', `(${nickUserIds.length ? nickUserIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
   const monthlyActives = new Set(((recentUsers30d as any[]) || []).map((r) => r.user_id)).size;
 
+  // ==================== HEALTH CHECK ====================
+  // Signals worth surfacing every time we pull stats:
+  //   - accounts that need reauth (Google refresh token dead → mirroring paused for them)
+  //   - stuck backfills (status running/canceling with no updates in >10min)
+  //   - watch channels expiring soon (<24h) → mirrors go dark when they expire
+  //   - failed backfills (backfill_status=failed)
+  //   - webhook liveness: any event_mapping updated in last 60min = sync is alive
+  const { count: needsReauth } = await (supabaseAdmin as any)
+    .from('user_accounts')
+    .select('account_id', { count: 'exact', head: true })
+    .eq('needs_reauth', true);
+
+  const { count: failedBackfills } = await (supabaseAdmin as any)
+    .from('user_accounts')
+    .select('account_id', { count: 'exact', head: true })
+    .eq('backfill_status', 'failed');
+
+  const stuckThreshold = new Date(now - 10 * 60_000).toISOString();
+  const { count: stuckBackfills } = await (supabaseAdmin as any)
+    .from('user_accounts')
+    .select('account_id', { count: 'exact', head: true })
+    .in('backfill_status', ['running', 'canceling'])
+    .lt('backfill_started_at', stuckThreshold);
+
+  // Watch channels expiring in the next 24h — cron should catch these but
+  // if it isn't running, mirrors stop working when they lapse.
+  const in24h = new Date(now + 24 * 3600_000).toISOString();
+  const { count: watchesExpiringSoon } = await (supabaseAdmin as any)
+    .from('user_accounts')
+    .select('account_id', { count: 'exact', head: true })
+    .eq('is_source_account', true)
+    .not('watch_expiration', 'is', null)
+    .lt('watch_expiration', in24h);
+
+  // Watches ALREADY expired (worse than expiring)
+  const { count: watchesExpired } = await (supabaseAdmin as any)
+    .from('user_accounts')
+    .select('account_id', { count: 'exact', head: true })
+    .eq('is_source_account', true)
+    .not('watch_expiration', 'is', null)
+    .lt('watch_expiration', new Date(now).toISOString());
+
+  // Webhook liveness: last event_mapping created OR updated across all users
+  const { data: lastMapping } = await (supabaseAdmin as any)
+    .from('event_mappings')
+    .select('created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const lastActivityAt = (lastMapping as any)?.updated_at || (lastMapping as any)?.created_at || null;
+  const lastActivityAgeMinutes = lastActivityAt
+    ? Math.round((now - new Date(lastActivityAt).getTime()) / 60_000)
+    : null;
+
+  // Overall status: green if nothing serious, yellow if warnings, red if broken
+  const redFlags: string[] = [];
+  const yellowFlags: string[] = [];
+  if ((watchesExpired || 0) > 0) redFlags.push(`${watchesExpired} watch channel(s) expired`);
+  if ((stuckBackfills || 0) > 0) redFlags.push(`${stuckBackfills} backfill(s) stuck > 10min`);
+  if ((needsReauth || 0) > 3) redFlags.push(`${needsReauth} accounts need reauth`);
+  if ((watchesExpiringSoon || 0) > 0) yellowFlags.push(`${watchesExpiringSoon} watch channel(s) expire in <24h`);
+  if ((failedBackfills || 0) > 0) yellowFlags.push(`${failedBackfills} failed backfill(s)`);
+  if ((needsReauth || 0) > 0 && (needsReauth || 0) <= 3) yellowFlags.push(`${needsReauth} account(s) need reauth`);
+  if (lastActivityAgeMinutes !== null && lastActivityAgeMinutes > 60) {
+    yellowFlags.push(`no mapping activity in last ${lastActivityAgeMinutes}min`);
+  }
+  const overallStatus = redFlags.length > 0 ? 'RED' : yellowFlags.length > 0 ? 'YELLOW' : 'GREEN';
+
   return NextResponse.json({
     users: {
       total_including_nick: totalUsers || 0,
@@ -143,6 +211,17 @@ export async function GET(req: NextRequest) {
       new_mappings_last_7d: mappingsLast7d || 0,
       weekly_active_users: weeklyActives,
       monthly_active_users: monthlyActives,
+    },
+    health: {
+      status: overallStatus,
+      red_flags: redFlags,
+      yellow_flags: yellowFlags,
+      accounts_needing_reauth: needsReauth || 0,
+      failed_backfills: failedBackfills || 0,
+      stuck_backfills: stuckBackfills || 0,
+      watches_expired: watchesExpired || 0,
+      watches_expiring_next_24h: watchesExpiringSoon || 0,
+      last_mapping_activity_age_minutes: lastActivityAgeMinutes,
     },
     excluded_from_metrics: {
       nick_user_count: nickUserIds.length,
