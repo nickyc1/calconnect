@@ -136,9 +136,9 @@ export async function POST(req: NextRequest) {
   if (!billing || (billing as any).plan !== 'pro') {
     return NextResponse.json({ error: 'Mirroring existing events is a Pro feature.' }, { status: 402 });
   }
-  if (!(billing as any).mirror_existing_beta) {
-    return NextResponse.json({ error: 'This feature is in beta. Contact support to opt in.' }, { status: 403 });
-  }
+  // Beta gate removed 2026-09-01. Feature is stable, Eric was the first
+  // external upgrade to Pro and had to be manually flipped. Any future Pro
+  // user gets backfill without a manual step.
 
   const acct = await getSourceAccount(user.id, accountId);
   if (!acct) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
