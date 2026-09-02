@@ -44,6 +44,17 @@ export class CalendarSyncService {
       };
     }
 
+    // Skip source events marked as "Free" (transparency: 'transparent').
+    // Google Calendar's Free/Busy toggle is the user's own signal that the
+    // event does NOT block time — informational only (a tutoring reminder,
+    // trash day, a friend's birthday). Mirroring those as Busy on the other
+    // calendars would defeat the point. Users can flip an event to Busy on
+    // the source if they want it mirrored.
+    if ((sourceEvent as any).transparency === 'transparent') {
+      console.log(`Event ${sourceEventId} marked Free on source, skipping mirror`);
+      return { successful: [], failed: [] };
+    }
+
     // Fetch the source account's per-source customization (color + label + window).
     // These govern how mirrored blocks appear on the OTHER calendars, so a
     // user can tell "block from personal" apart from "block from side project"

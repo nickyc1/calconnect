@@ -81,6 +81,9 @@ export async function GET(req: NextRequest) {
   const filtered = events.filter((e: any) => {
     if (e.status === 'cancelled') return false;
     if (e.extendedProperties?.private?.calconnect_is_mirror === 'true') return false;
+    // Skip Free-transparency events so the estimate matches what the
+    // sync engine will actually mirror.
+    if (e.transparency === 'transparent') return false;
     if (mirrorWindow) {
       const overlaps = eventOverlapsWindow(
         {
