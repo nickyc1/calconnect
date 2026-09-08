@@ -90,6 +90,13 @@ export async function POST(request: NextRequest) {
     let updated = 0;
     let deleted = 0;
 
+    // Debug logging for Eric's recurring-instance update bug (2026-09-08).
+    // Fires only for Eric's user_id and only on recurring events so we can
+    // see what Google actually sends when he moves one instance, and
+    // whether our mapping lookup matches Google's exception ID format.
+    // Remove after we ship the fix.
+    const DEBUG_ERIC_USER_ID = 'b22ab8d2-a318-47bf-b5c5-76b1fa0c6827';
+
     for (const event of changedEvents) {
       try {
         const eventId = (event as any).id;
@@ -100,8 +107,26 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        const isRecurringInstance = !!(event as any).recurringEventId;
+        const debugThis = userId === DEBUG_ERIC_USER_ID && isRecurringInstance;
+
+        if (debugThis) {
+          console.log('[eric-debug] incoming recurring instance', JSON.stringify({
+            eventId,
+            recurringEventId: (event as any).recurringEventId,
+            originalStartTime: (event as any).originalStartTime,
+            start: (event as any).start,
+            end: (event as any).end,
+            status: (event as any).status,
+            updated: (event as any).updated,
+            calendarId,
+            accountId,
+          }));
+        }
+
         // Handle cancelled/deleted events
         if ((event as any).status === 'cancelled') {
+          if (debugThis) console.log('[eric-debug] treating as cancelled, calling handleEventDeleted');
           await calendarSync.handleEventDeleted(
             userId,
             userId, // externalUserId is the same now
@@ -120,6 +145,30 @@ export async function POST(request: NextRequest) {
           .eq('source_event_id', eventId)
           .eq('source_calendar_id', calendarId)
           .maybeSingle();
+
+        if (debugThis) {
+          console.log('[eric-debug] mapping lookup result', JSON.stringify({
+            eventIdSearched: eventId,
+            found: !!existingMapping,
+            mappingRecurringEventId: existingMapping ? (existingMapping as any).recurring_event_id : null,
+            mappingSourceAccountId: existingMapping ? (existingMapping as any).source_account_id : null,
+            willTake: existingMapping
+              ? ((existingMapping as any).source_account_id === accountId ? 'update' : 'skip-account-mismatch')
+              : 'create',
+          }));
+
+          // Extra: look up any mapping with matching recurring_event_id so we
+          // can see what IDs we DID store for this recurring series.
+          if (!existingMapping) {
+            const { data: siblingMappings } = await (supabaseAdmin as any)
+              .from('event_mappings')
+              .select('source_event_id, is_recurring, recurring_event_id')
+              .eq('user_id', userId)
+              .eq('recurring_event_id', (event as any).recurringEventId)
+              .limit(5);
+            console.log('[eric-debug] mappings that DO exist for this series', JSON.stringify(siblingMappings));
+          }
+        }
 
         if (existingMapping) {
           // Validate source account matches
