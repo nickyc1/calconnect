@@ -110,9 +110,20 @@ export async function POST(request: NextRequest) {
         const isRecurringInstance = !!(event as any).recurringEventId;
         const debugThis = userId === DEBUG_ERIC_USER_ID && isRecurringInstance;
 
+        const debugLog = async (stage: string, extra: any = {}) => {
+          if (!debugThis) return;
+          try {
+            await (supabaseAdmin as any).from('webhook_debug_log').insert({
+              user_id: userId,
+              account_id: accountId,
+              tag: 'eric-recurring',
+              payload: { stage, eventId, ...extra },
+            });
+          } catch {}
+        };
+
         if (debugThis) {
-          console.log('[eric-debug] incoming recurring instance', JSON.stringify({
-            eventId,
+          await debugLog('incoming', {
             recurringEventId: (event as any).recurringEventId,
             originalStartTime: (event as any).originalStartTime,
             start: (event as any).start,
@@ -120,13 +131,12 @@ export async function POST(request: NextRequest) {
             status: (event as any).status,
             updated: (event as any).updated,
             calendarId,
-            accountId,
-          }));
+          });
         }
 
         // Handle cancelled/deleted events
         if ((event as any).status === 'cancelled') {
-          if (debugThis) console.log('[eric-debug] treating as cancelled, calling handleEventDeleted');
+          if (debugThis) await debugLog('cancelled-branch');
           await calendarSync.handleEventDeleted(
             userId,
             userId, // externalUserId is the same now
@@ -147,26 +157,26 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         if (debugThis) {
-          console.log('[eric-debug] mapping lookup result', JSON.stringify({
-            eventIdSearched: eventId,
+          const willTake = existingMapping
+            ? ((existingMapping as any).source_account_id === accountId ? 'update' : 'skip-account-mismatch')
+            : 'create';
+          await debugLog('mapping-lookup', {
             found: !!existingMapping,
             mappingRecurringEventId: existingMapping ? (existingMapping as any).recurring_event_id : null,
             mappingSourceAccountId: existingMapping ? (existingMapping as any).source_account_id : null,
-            willTake: existingMapping
-              ? ((existingMapping as any).source_account_id === accountId ? 'update' : 'skip-account-mismatch')
-              : 'create',
-          }));
+            willTake,
+          });
 
-          // Extra: look up any mapping with matching recurring_event_id so we
-          // can see what IDs we DID store for this recurring series.
+          // If we didn't find the exact mapping, dump what mappings DO exist
+          // for this recurring series so we can compare ID formats.
           if (!existingMapping) {
             const { data: siblingMappings } = await (supabaseAdmin as any)
               .from('event_mappings')
               .select('source_event_id, is_recurring, recurring_event_id')
               .eq('user_id', userId)
               .eq('recurring_event_id', (event as any).recurringEventId)
-              .limit(5);
-            console.log('[eric-debug] mappings that DO exist for this series', JSON.stringify(siblingMappings));
+              .limit(10);
+            await debugLog('sibling-mappings', { siblings: siblingMappings });
           }
         }
 
