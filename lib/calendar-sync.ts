@@ -326,18 +326,59 @@ export class CalendarSyncService {
 
     console.log(`Updating ${mapping.mirrored_events.length} mirror(s)`);
 
+    const DEBUG_ERIC_USER_ID = 'b22ab8d2-a318-47bf-b5c5-76b1fa0c6827';
+    const debugThisUpdate = userId === DEBUG_ERIC_USER_ID;
+
     const updatePromises = mapping.mirrored_events.map(async (mirror: MirroredEvent) => {
       try {
         const auth = await googleAuth.getClientByAccountId(userId, mirror.account_id);
-        await withRetry(() =>
+        const patchResult = await withRetry(() =>
           googleCalendar.updateMirrorEvent(auth, mirror.calendar_id, mirror.event_id, {
             start: sourceEvent.start,
             end: sourceEvent.end,
           })
         );
+        if (debugThisUpdate) {
+          try {
+            await (supabaseAdmin as any).from('webhook_debug_log').insert({
+              user_id: userId,
+              account_id: mirror.account_id,
+              tag: 'eric-recurring',
+              payload: {
+                stage: 'patch-success',
+                sourceEventId,
+                mirrorEventId: mirror.event_id,
+                mirrorCalendarId: mirror.calendar_id,
+                mirrorAccountId: mirror.account_id,
+                patchedStart: sourceEvent.start,
+                patchedEnd: sourceEvent.end,
+                returnedStart: (patchResult as any)?.start,
+                returnedEnd: (patchResult as any)?.end,
+              },
+            });
+          } catch {}
+        }
         return { success: true, mirror };
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Failed to update mirror ${mirror.event_id}:`, error);
+        if (debugThisUpdate) {
+          try {
+            await (supabaseAdmin as any).from('webhook_debug_log').insert({
+              user_id: userId,
+              account_id: mirror.account_id,
+              tag: 'eric-recurring',
+              payload: {
+                stage: 'patch-failed',
+                sourceEventId,
+                mirrorEventId: mirror.event_id,
+                mirrorCalendarId: mirror.calendar_id,
+                mirrorAccountId: mirror.account_id,
+                errorCode: error?.code || error?.status,
+                errorMessage: error?.message,
+              },
+            });
+          } catch {}
+        }
         return { success: false, error };
       }
     });
