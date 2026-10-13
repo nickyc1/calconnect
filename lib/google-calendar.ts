@@ -56,6 +56,11 @@ class GoogleCalendarService {
       transparency: 'opaque',
       attendees: [],
       colorId: eventData.colorId || '8',
+      // Disable reminders on mirror events. Without this, Google falls back
+      // to the destination calendar's defaults (usually a 10-min popup plus
+      // email). For a Busy block that's just a visibility signal, firing
+      // reminders is pure noise. Eric caught this on 2026-10-13.
+      reminders: { useDefault: false, overrides: [] },
       extendedProperties: {
         private: {
           calconnect_source_event_id: eventData.sourceEventId,
