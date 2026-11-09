@@ -172,6 +172,11 @@ export default function DashboardPage() {
     minutesHigh: number
   } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  // Force Refresh state: which account is currently being reconciled, plus a
+  // per-account short result string ("Removed 42 orphans") displayed next to
+  // the button after it finishes.
+  const [refreshing, setRefreshing] = useState<string | null>(null)
+  const [refreshResult, setRefreshResult] = useState<Record<string, string>>({})
   // Local draft of the mirror window BEFORE the user has committed anything.
   // Clicking the checkbox pre-fills a draft (all 7 days, no times) but does
   // NOT save — the "Saved" toast only appears after the user changes a day or
@@ -416,6 +421,48 @@ export default function DashboardPage() {
       }
     } finally {
       setCancelingBackfill(false)
+    }
+  }
+
+  // Force Refresh: ask the server to walk every mapping for this source and
+  // delete any whose source event is gone. Chunked under the hood, we just
+  // keep calling until the server says done. Keeps a progress message on the
+  // button so the user can see it is doing something.
+  const runRefresh = async (accountId: string) => {
+    setRefreshing(accountId)
+    setRefreshResult((prev) => ({ ...prev, [accountId]: '' }))
+    let cursor = 0
+    let orphansRemoved = 0
+    let mirrorsDeleted = 0
+    let stillExists = 0
+    let total = 0
+    try {
+      while (true) {
+        const res = await fetch('/api/mirroring/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId, cursor }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setRefreshResult((prev) => ({ ...prev, [accountId]: `Error: ${data?.error || res.status}` }))
+          return
+        }
+        orphansRemoved += data.orphansRemoved || 0
+        mirrorsDeleted += data.mirrorsDeleted || 0
+        stillExists += data.stillExists || 0
+        total = data.totalMappings || total
+        cursor = data.nextCursor
+        if (data.done) break
+      }
+      const parts: string[] = []
+      if (orphansRemoved > 0) parts.push(`removed ${orphansRemoved} orphan${orphansRemoved === 1 ? '' : 's'}`)
+      if (mirrorsDeleted > 0) parts.push(`${mirrorsDeleted} mirror${mirrorsDeleted === 1 ? '' : 's'} cleaned`)
+      const msg = parts.length ? `✓ ${parts.join(', ')}` : `✓ All ${stillExists} mirrors in sync`
+      setRefreshResult((prev) => ({ ...prev, [accountId]: msg }))
+      setTimeout(() => setRefreshResult((prev) => ({ ...prev, [accountId]: '' })), 8000)
+    } finally {
+      setRefreshing(null)
     }
   }
 
@@ -1161,7 +1208,7 @@ export default function DashboardPage() {
                         {/* Row: Backfill existing events — button-driven with modal */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', flexWrap: 'wrap', color: '#4a4a45' }}>
                           {backfillStatus === 'idle' || backfillStatus === 'canceled' ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <button
                                 type="button"
                                 onClick={() => openBackfillPreview(account.account_id)}
@@ -1177,6 +1224,35 @@ export default function DashboardPage() {
                                 <span className="cc-tooltip-trigger">?</span>
                                 <span className="cc-tooltip-bubble">One-time backfill of events already on this calendar.</span>
                               </span>
+                              {/* Force Refresh button — reconciles mirrors against what
+                                  is actually on the source calendar. Fixes orphan
+                                  mirrors left behind when Google skipped a push
+                                  notification (series deletes, bulk reschedules). */}
+                              <button
+                                type="button"
+                                onClick={() => runRefresh(account.account_id)}
+                                disabled={refreshing === account.account_id}
+                                style={{
+                                  background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
+                                  padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
+                                  cursor: refreshing === account.account_id ? 'wait' : 'pointer',
+                                  fontFamily: 'inherit',
+                                  opacity: refreshing === account.account_id ? 0.6 : 1,
+                                }}
+                              >
+                                {refreshing === account.account_id
+                                  ? <>Refreshing<AnimatedDots /></>
+                                  : 'Force refresh ↻'}
+                              </button>
+                              <span className="cc-tooltip">
+                                <span className="cc-tooltip-trigger">?</span>
+                                <span className="cc-tooltip-bubble">Checks every mirror against this source and cleans up any that no longer exist. Use after deleting a series or bulk-editing events.</span>
+                              </span>
+                              {refreshResult[account.account_id] && (
+                                <span style={{ fontSize: '0.72rem', color: '#1e5f22' }}>
+                                  {refreshResult[account.account_id]}
+                                </span>
+                              )}
                             </span>
                           ) : backfillRunning ? (
                             <>
