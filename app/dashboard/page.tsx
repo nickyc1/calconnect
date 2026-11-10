@@ -1281,6 +1281,31 @@ export default function DashboardPage() {
                               </span>
                               <button
                                 type="button"
+                                onClick={() => runRefresh(account.account_id)}
+                                disabled={refreshing === account.account_id}
+                                style={{
+                                  background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
+                                  padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem',
+                                  cursor: refreshing === account.account_id ? 'wait' : 'pointer',
+                                  fontFamily: 'inherit',
+                                  opacity: refreshing === account.account_id ? 0.6 : 1,
+                                }}
+                              >
+                                {refreshing === account.account_id
+                                  ? <>Refreshing<AnimatedDots /></>
+                                  : 'Force refresh ↻'}
+                              </button>
+                              <span className="cc-tooltip">
+                                <span className="cc-tooltip-trigger">?</span>
+                                <span className="cc-tooltip-bubble">Checks every mirror against this source and cleans up any that no longer exist. Use after deleting a series or bulk-editing events.</span>
+                              </span>
+                              {refreshResult[account.account_id] && (
+                                <span style={{ fontSize: '0.72rem', color: '#1e5f22' }}>
+                                  {refreshResult[account.account_id]}
+                                </span>
+                              )}
+                              <button
+                                type="button"
                                 onClick={() => setBackfillModal({ accountId: account.account_id, stage: 'confirm-cancel' })}
                                 style={{ background: 'transparent', border: 'none', color: '#8a887f', fontSize: '0.75rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
                               >
