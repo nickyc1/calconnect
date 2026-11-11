@@ -175,7 +175,11 @@ export default function DashboardPage() {
   // Force Refresh state: which account is currently being reconciled, plus a
   // per-account short result string ("Removed 42 orphans") displayed next to
   // the button after it finishes.
-  const [refreshing, setRefreshing] = useState<string | null>(null)
+  // Track per-account so multiple refreshes can run concurrently without the
+  // second click overwriting the first's "Refreshing…" label. Eric flagged
+  // that behavior looked like the first refresh had been cancelled when it
+  // was actually still processing in the background.
+  const [refreshing, setRefreshing] = useState<Record<string, boolean>>({})
   const [refreshResult, setRefreshResult] = useState<Record<string, string>>({})
   // Local draft of the mirror window BEFORE the user has committed anything.
   // Clicking the checkbox pre-fills a draft (all 7 days, no times) but does
@@ -429,7 +433,7 @@ export default function DashboardPage() {
   // keep calling until the server says done. Keeps a progress message on the
   // button so the user can see it is doing something.
   const runRefresh = async (accountId: string) => {
-    setRefreshing(accountId)
+    setRefreshing((prev) => ({ ...prev, [accountId]: true }))
     setRefreshResult((prev) => ({ ...prev, [accountId]: '' }))
     let cursor = 0
     let orphansRemoved = 0
@@ -462,7 +466,11 @@ export default function DashboardPage() {
       setRefreshResult((prev) => ({ ...prev, [accountId]: msg }))
       setTimeout(() => setRefreshResult((prev) => ({ ...prev, [accountId]: '' })), 8000)
     } finally {
-      setRefreshing(null)
+      setRefreshing((prev) => {
+        const next = { ...prev }
+        delete next[accountId]
+        return next
+      })
     }
   }
 
@@ -1231,22 +1239,22 @@ export default function DashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => runRefresh(account.account_id)}
-                                disabled={refreshing === account.account_id}
+                                disabled={refreshing[account.account_id]}
                                 style={{
                                   background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
                                   padding: '5px 12px', borderRadius: 6, fontSize: '0.8rem',
-                                  cursor: refreshing === account.account_id ? 'wait' : 'pointer',
+                                  cursor: refreshing[account.account_id] ? 'wait' : 'pointer',
                                   fontFamily: 'inherit',
-                                  opacity: refreshing === account.account_id ? 0.6 : 1,
+                                  opacity: refreshing[account.account_id] ? 0.6 : 1,
                                 }}
                               >
-                                {refreshing === account.account_id
+                                {refreshing[account.account_id]
                                   ? <>Refreshing<AnimatedDots /></>
                                   : 'Force refresh ↻'}
                               </button>
                               <span className="cc-tooltip">
                                 <span className="cc-tooltip-trigger">?</span>
-                                <span className="cc-tooltip-bubble">Checks every mirror against this source and cleans up any that no longer exist. Use after deleting a series or bulk-editing events.</span>
+                                <span className="cc-tooltip-bubble">Cleans up orphan blocks that originated FROM this calendar. If you deleted an event on another source, click Force refresh on THAT source, not this one.</span>
                               </span>
                               {refreshResult[account.account_id] && (
                                 <span style={{ fontSize: '0.72rem', color: '#1e5f22' }}>
@@ -1282,22 +1290,22 @@ export default function DashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => runRefresh(account.account_id)}
-                                disabled={refreshing === account.account_id}
+                                disabled={refreshing[account.account_id]}
                                 style={{
                                   background: 'white', border: '1px solid #d5d3ce', color: '#14140f',
                                   padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem',
-                                  cursor: refreshing === account.account_id ? 'wait' : 'pointer',
+                                  cursor: refreshing[account.account_id] ? 'wait' : 'pointer',
                                   fontFamily: 'inherit',
-                                  opacity: refreshing === account.account_id ? 0.6 : 1,
+                                  opacity: refreshing[account.account_id] ? 0.6 : 1,
                                 }}
                               >
-                                {refreshing === account.account_id
+                                {refreshing[account.account_id]
                                   ? <>Refreshing<AnimatedDots /></>
                                   : 'Force refresh ↻'}
                               </button>
                               <span className="cc-tooltip">
                                 <span className="cc-tooltip-trigger">?</span>
-                                <span className="cc-tooltip-bubble">Checks every mirror against this source and cleans up any that no longer exist. Use after deleting a series or bulk-editing events.</span>
+                                <span className="cc-tooltip-bubble">Cleans up orphan blocks that originated FROM this calendar. If you deleted an event on another source, click Force refresh on THAT source, not this one.</span>
                               </span>
                               {refreshResult[account.account_id] && (
                                 <span style={{ fontSize: '0.72rem', color: '#1e5f22' }}>
