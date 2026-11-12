@@ -181,6 +181,8 @@ export default function DashboardPage() {
   // was actually still processing in the background.
   const [refreshing, setRefreshing] = useState<Record<string, boolean>>({})
   const [refreshResult, setRefreshResult] = useState<Record<string, string>>({})
+  const [refreshingAll, setRefreshingAll] = useState(false)
+  const [refreshAllResult, setRefreshAllResult] = useState<string>('')
   // Local draft of the mirror window BEFORE the user has committed anything.
   // Clicking the checkbox pre-fills a draft (all 7 days, no times) but does
   // NOT save — the "Saved" toast only appears after the user changes a day or
@@ -432,43 +434,98 @@ export default function DashboardPage() {
   // delete any whose source event is gone. Chunked under the hood, we just
   // keep calling until the server says done. Keeps a progress message on the
   // button so the user can see it is doing something.
-  const runRefresh = async (accountId: string) => {
-    setRefreshing((prev) => ({ ...prev, [accountId]: true }))
-    setRefreshResult((prev) => ({ ...prev, [accountId]: '' }))
+  // Low-level driver: walks the chunked /refresh endpoint for one account and
+  // returns aggregate counts. Does NOT touch per-account UI state so it can
+  // also be called by "Refresh all".
+  const refreshOne = async (accountId: string) => {
     let cursor = 0
     let orphansRemoved = 0
     let mirrorsDeleted = 0
     let stillExists = 0
-    let total = 0
-    try {
-      while (true) {
-        const res = await fetch('/api/mirroring/refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accountId, cursor }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          setRefreshResult((prev) => ({ ...prev, [accountId]: `Error: ${data?.error || res.status}` }))
-          return
-        }
-        orphansRemoved += data.orphansRemoved || 0
-        mirrorsDeleted += data.mirrorsDeleted || 0
-        stillExists += data.stillExists || 0
-        total = data.totalMappings || total
-        cursor = data.nextCursor
-        if (data.done) break
+    while (true) {
+      const res = await fetch('/api/mirroring/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, cursor }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const err: any = new Error(data?.error || `HTTP ${res.status}`)
+        err.accountId = accountId
+        throw err
       }
+      orphansRemoved += data.orphansRemoved || 0
+      mirrorsDeleted += data.mirrorsDeleted || 0
+      stillExists += data.stillExists || 0
+      cursor = data.nextCursor
+      if (data.done) break
+    }
+    return { orphansRemoved, mirrorsDeleted, stillExists }
+  }
+
+  const runRefresh = async (accountId: string) => {
+    setRefreshing((prev) => ({ ...prev, [accountId]: true }))
+    setRefreshResult((prev) => ({ ...prev, [accountId]: '' }))
+    try {
+      const { orphansRemoved, mirrorsDeleted, stillExists } = await refreshOne(accountId)
       const parts: string[] = []
       if (orphansRemoved > 0) parts.push(`removed ${orphansRemoved} orphan${orphansRemoved === 1 ? '' : 's'}`)
       if (mirrorsDeleted > 0) parts.push(`${mirrorsDeleted} mirror${mirrorsDeleted === 1 ? '' : 's'} cleaned`)
       const msg = parts.length ? `✓ ${parts.join(', ')}` : `✓ All ${stillExists} mirrors in sync`
       setRefreshResult((prev) => ({ ...prev, [accountId]: msg }))
       setTimeout(() => setRefreshResult((prev) => ({ ...prev, [accountId]: '' })), 8000)
+    } catch (err: any) {
+      setRefreshResult((prev) => ({ ...prev, [accountId]: `Error: ${err?.message || 'failed'}` }))
     } finally {
       setRefreshing((prev) => {
         const next = { ...prev }
         delete next[accountId]
+        return next
+      })
+    }
+  }
+
+  // Refresh all source calendars in parallel. Each account's per-row button
+  // also lights up so the user can see which ones are still working.
+  const runRefreshAll = async () => {
+    const sources = accounts.filter(a => a.is_source_account && !a.needs_reauth)
+    if (sources.length === 0) return
+    setRefreshingAll(true)
+    setRefreshAllResult('')
+    setRefreshing((prev) => {
+      const next = { ...prev }
+      for (const a of sources) next[a.account_id] = true
+      return next
+    })
+    let orphansRemoved = 0
+    let mirrorsDeleted = 0
+    let stillExists = 0
+    let failed = 0
+    try {
+      const results = await Promise.allSettled(sources.map(a => refreshOne(a.account_id)))
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          orphansRemoved += r.value.orphansRemoved
+          mirrorsDeleted += r.value.mirrorsDeleted
+          stillExists += r.value.stillExists
+        } else {
+          failed++
+        }
+      }
+      const parts: string[] = []
+      if (orphansRemoved > 0) parts.push(`removed ${orphansRemoved} orphan${orphansRemoved === 1 ? '' : 's'}`)
+      if (mirrorsDeleted > 0) parts.push(`${mirrorsDeleted} mirror${mirrorsDeleted === 1 ? '' : 's'} cleaned`)
+      if (failed > 0) parts.push(`${failed} calendar${failed === 1 ? '' : 's'} failed`)
+      const msg = parts.length
+        ? `✓ ${parts.join(', ')} across ${sources.length} calendar${sources.length === 1 ? '' : 's'}`
+        : `✓ All ${stillExists} mirrors in sync across ${sources.length} calendar${sources.length === 1 ? '' : 's'}`
+      setRefreshAllResult(msg)
+      setTimeout(() => setRefreshAllResult(''), 10000)
+    } finally {
+      setRefreshingAll(false)
+      setRefreshing((prev) => {
+        const next = { ...prev }
+        for (const a of sources) delete next[a.account_id]
         return next
       })
     }
@@ -844,12 +901,41 @@ export default function DashboardPage() {
         border: '1px solid #e5e7eb'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
-          <h3 style={{ margin: 0 }}>
-            Connected Accounts ({accounts.length}
-            {billing
-              ? `/${Math.max(billing.entitled_calendars, billing.plan === 'free' ? 2 : billing.entitled_calendars)}`
-              : ''})
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>
+              Connected Accounts ({accounts.length}
+              {billing
+                ? `/${Math.max(billing.entitled_calendars, billing.plan === 'free' ? 2 : billing.entitled_calendars)}`
+                : ''})
+            </h3>
+            {accounts.filter(a => a.is_source_account && !a.needs_reauth).length >= 2 && (
+              <span className="cc-tooltip" style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                <button
+                  onClick={runRefreshAll}
+                  disabled={refreshingAll}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #d0d0c8',
+                    color: refreshingAll ? '#888' : '#4a4a45',
+                    padding: '3px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: refreshingAll ? 'wait' : 'pointer',
+                    opacity: refreshingAll ? 0.6 : 1,
+                  }}
+                >
+                  {refreshingAll ? <>Refreshing all<AnimatedDots /></> : 'Refresh all ↻'}
+                </button>
+                <span className="cc-tooltip-bubble">Cleans up orphan blocks across every source calendar at once. Use this if you've deleted events on multiple calendars.</span>
+                {refreshAllResult && (
+                  <span style={{ fontSize: '0.78rem', color: refreshAllResult.startsWith('✓') ? '#1e5f22' : '#b03a2e' }}>
+                    {refreshAllResult}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
           {billing && (
             <div style={{ fontSize: '0.85rem', color: '#4a4a45', display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>
               <span style={{
