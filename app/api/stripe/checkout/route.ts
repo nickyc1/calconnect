@@ -59,12 +59,14 @@ export async function POST(req: NextRequest) {
       }
       if (existing.length) {
         const sub = existing[0];
+        const configuration = addon ? process.env.STRIPE_ADDON_PORTAL_CONFIGURATION_ID : undefined;
+        if (addon && !configuration) throw new Error('Addon portal is not configured');
         const item = addon ? sub.items.data.find(i => i.price.id === price) : baseItems(sub)[0];
         const targetQuantity = addon ? (item?.quantity || 0) + quantity : quantity;
         if (targetQuantity > 50) return NextResponse.json({ error: 'Contact support for more than 50 extra calendars.' }, { status: 400 });
         const canConfirm = ['active', 'trialing'].includes(sub.status) && sub.items.data.length === 1 && item &&
           (item.price.id !== price || item.quantity !== targetQuantity);
-        const portal = await stripe.billingPortal.sessions.create({ customer, return_url: `${origin}/dashboard`,
+        const portal = await stripe.billingPortal.sessions.create({ customer, ...(configuration ? { configuration } : {}), return_url: `${origin}/dashboard`,
           ...(canConfirm ? { flow_data: {
             type: 'subscription_update_confirm' as const,
             subscription_update_confirm: { subscription: sub.id, items: [{ id: item.id, price, quantity: targetQuantity }] },

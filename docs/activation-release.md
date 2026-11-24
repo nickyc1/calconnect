@@ -1,16 +1,17 @@
-# Billing and activation release — staged, not deployed
+# Billing and activation release
 
-This branch changes code only. No Stripe customer, subscription, invoice, refund,
-production database, sender account, or customer email has been changed. Eric's
-Basic and Pro subscriptions must remain untouched in this release.
+Release approved November 24, 2026. Migration 022 is applied in production. The
+dedicated addon portal and production environment settings are saved. No live
+customer subscription, invoice, refund, sender account, or customer email has
+been changed. Eric's Basic and Pro subscriptions remain untouched.
 
 ## Release review
 
 | Target | Proposed operation | Parameters / intended effect | Status |
 | --- | --- | --- | --- |
-| Supabase production | Apply migration 022 | Add durable billing locks/checkout attempts, lifetime entitlement flag, private activation/support/outbox tables, first-live-mirror trigger. Backfill milestone evidence only; no email enrollment. | Awaiting approval |
-| Stripe Billing Portal | Verify configuration, stage any required changes | Allow existing Basic/Pro price changes and addon quantity changes; configure the intended proration policy. Existing-item confirmation must work before opening upgrades to customers. Do not create/cancel/refund subscriptions. | Read-only verification still needed; mutations require approval |
-| Existing CalConnect deployment | Release exact reviewed commit after migration | Billing fixes, dashboard checklist, support queue, `/admin/activation`; set `CALCONNECT_ADMIN_EMAILS` to the owner's verified login email. Keep `LIFECYCLE_EMAIL_ENABLED=false`. | Awaiting approval |
+| Supabase production | Apply migration 022 | Add durable billing locks/checkout attempts, lifetime entitlement flag, private activation/support/outbox tables, first-live-mirror trigger. Backfill milestone evidence only; no email enrollment. | Approved for release |
+| Stripe Billing Portal | Verify configuration, stage any required changes | Allow existing Basic/Pro price changes and addon quantity changes; configure the intended proration policy. Existing-item confirmation must work before opening upgrades to customers. Do not create/cancel/refund subscriptions. | Approved and configured |
+| Existing CalConnect deployment | Release exact reviewed commit after migration | Billing fixes, dashboard checklist, support queue, `/admin/activation`; set `CALCONNECT_ADMIN_EMAILS` to the owner's verified login email. Keep `LIFECYCLE_EMAIL_ENABLED=false`. | Approved for release |
 | Email provider | Configure optional Resend transport | Verified sender, monitored reply-to, business postal address, API/signing secrets; verified webhook `/api/lifecycle/webhook` for bounced, complained, suppressed events. No credentials in source. | Not configured; separate approval |
 | Lifecycle email delivery | Enable only after provider setup and recipient/copy review | `LIFECYCLE_EMAIL_ENABLED=true`; optional scheduled GET `/api/cron/lifecycle` with CRON_SECRET; maximum two approved recipients per run. No cron was added in this branch. | Disabled |
 | Existing customers | Review enrollment individually | Explicit email opt-in required. Operator enrolls in existing-customer sequence, prepares the next email, reads recipient/copy, then approves that message. | No customers enrolled |
@@ -123,3 +124,31 @@ bounded change. Build output also includes existing dynamic-route prerender
 messages and a Browserslist warning; they do not fail the build. No Rafter scan
 was run because this was implementation work, not an explicit final public-launch
 review request.
+
+## November 24 release checks
+
+Dedicated live addon configuration: `bpc_1UfRK4DYUaDN1g130wFvGAQJ`.
+Only Extra Calendar quantity updates (1–50), no price switching, immediate
+proration/invoicing. Stripe requires payment-method updates enabled. The default
+Basic/Pro configuration was not modified. Production environment has
+`STRIPE_ADDON_PORTAL_CONFIGURATION_ID` set to this configuration,
+`LIFECYCLE_EMAIL_ENABLED=false`, and the verified owner login in
+`CALCONNECT_ADMIN_EMAILS`. No email cron is configured.
+
+39 Jest tests pass, including signed webhook replay/deduplication and failed
+reconciliation retry. Production build passes on Node 22.23.0. Test-mode Stripe
+accepted existing-item Basic-to-Pro and addon confirmation sessions; API-applied
+updates retained subscription/item IDs with no duplicate. Concurrent idempotency
+requests and open-session retry resolved to one Checkout session. These are API
+checks, not a completed customer browser purchase; webhook replay uses mocked
+storage and current subscriptions.
+
+Disposable test customer/subscriptions were removed and Checkout expired. The
+addon test configuration was deactivated. Stripe refused to deactivate the first
+base test configuration because it became the test-mode default; it remains in
+test mode only (`bpc_1UfRMwDHVuFynZ39BEG6yIeG`).
+
+Production migration verification: five new tables have RLS, zero queued emails,
+zero enrolled or opted-in profiles. Read-only comparison against the original
+Stripe snapshot confirmed all live subscription statuses, item IDs, prices,
+quantities and cancellation settings unchanged, including Eric.

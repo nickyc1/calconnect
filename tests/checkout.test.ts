@@ -22,6 +22,7 @@ import { POST } from '@/app/api/stripe/checkout/route';
 const subscription = (id: string, price = 'price_basic', status = 'active'): any => ({ id, status, items: { data: [{ id: `si_${id}`, price: { id: price }, quantity: 1 }] } });
 const request = (intent = 'pro_monthly', quantity?: number) => new NextRequest('https://example.com/api/stripe/checkout', { method: 'POST', body: JSON.stringify({ intent, quantity }), headers: { origin: 'https://untrusted.example' } });
 beforeEach(() => {
+  process.env.STRIPE_ADDON_PORTAL_CONFIGURATION_ID = 'bpc_addon';
   jest.clearAllMocks(); mockAttempt = null; mockSaveError = null; mockBilling = { stripe_customer_id: 'cus_1', plan: 'basic' };
   mockStripe.customers.retrieve.mockResolvedValue({ id: 'cus_1', metadata: { user_id: 'user_1' } });
   mockStripe.subscriptions.list.mockReturnValue({ autoPagingToArray: async () => [subscription('sub_basic')] });
@@ -95,5 +96,18 @@ test('completed checkout blocks another purchase while subscription propagation 
   mockAttempt = { request_id: 'base_attempt', intent: 'basic_monthly', quantity: 1, session_id: 'cs_base', created_at: new Date().toISOString() };
   mockStripe.checkout.sessions.retrieve.mockResolvedValue({ status: 'complete', subscription: 'sub_pending' });
   expect((await POST(request())).status).toBe(409);
+  expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+});
+
+test('addon uses its separate quantity-only portal', async () => {
+  mockStripe.subscriptions.list.mockReturnValue({ autoPagingToArray: async () => [subscription('sub_basic'), subscription('sub_extra','price_extra')] });
+  expect((await POST(request('extra_calendar'))).status).toBe(200);
+  expect(mockStripe.billingPortal.sessions.create.mock.calls[0][0].configuration).toBe('bpc_addon');
+});
+test('missing addon configuration cannot use the base-plan portal', async () => {
+  delete process.env.STRIPE_ADDON_PORTAL_CONFIGURATION_ID;
+  mockStripe.subscriptions.list.mockReturnValue({ autoPagingToArray: async () => [subscription('sub_extra','price_extra')] });
+  expect((await POST(request('extra_calendar'))).status).toBe(503);
+  expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
   expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 });
