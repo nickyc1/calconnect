@@ -1,0 +1,31 @@
+import { PGlite } from '@electric-sql/pglite';
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const db = new PGlite();
+await db.exec(`create schema auth; create role anon; create role authenticated; create role service_role;
+create table auth.users(id uuid primary key);
+create table public.user_billing(user_id uuid,plan text);
+create table public.event_mappings(user_id uuid, via_backfill boolean default false, mirrored_events jsonb, created_at timestamptz default now());
+insert into auth.users values ('00000000-0000-4000-8000-000000000001'),('00000000-0000-4000-8000-000000000002');
+insert into event_mappings values ('00000000-0000-4000-8000-000000000001',false,'[{"id":"old"}]','2026-11-01');`);
+await db.exec(readFileSync(new URL('../supabase/migrations/022_billing_and_activation.sql', import.meta.url),'utf8'));
+let r = await db.query('select * from activation_profiles');
+assert.equal(r.rows.length,1); assert.equal(r.rows[0].enrolled_at,null); assert.equal(r.rows[0].email_opt_in_at,null);
+await db.exec(`insert into event_mappings(user_id,via_backfill,mirrored_events) values
+ ('00000000-0000-4000-8000-000000000002',true,'[{"id":"backfill"}]'),
+ ('00000000-0000-4000-8000-000000000002',false,'[]');`);
+assert.equal((await db.query('select * from activation_profiles')).rows.length,1);
+await db.exec(`insert into event_mappings(user_id,via_backfill,mirrored_events) values ('00000000-0000-4000-8000-000000000002',false,'[{"id":"live"}]');`);
+assert.equal((await db.query('select * from activation_profiles')).rows.length,2);
+r = await db.query(`select acquire_operation_lock('billing:test','00000000-0000-4000-8000-000000000001') as ok`); assert.equal(r.rows[0].ok,true);
+r = await db.query(`select acquire_operation_lock('billing:test','00000000-0000-4000-8000-000000000002') as ok`); assert.equal(r.rows[0].ok,false);
+await db.exec(`update operation_locks set expires_at = now() - interval '1 minute'`);
+r = await db.query(`select acquire_operation_lock('billing:test','00000000-0000-4000-8000-000000000002') as ok`); assert.equal(r.rows[0].ok,true);
+await db.exec(`insert into activation_support_requests(user_id,message,snapshot) values ('00000000-0000-4000-8000-000000000001','Help','{}')`);
+await assert.rejects(db.exec(`insert into activation_support_requests(user_id,message,snapshot) values ('00000000-0000-4000-8000-000000000001','Again','{}')`));
+const security = await db.query(`select relname,relrowsecurity from pg_class where relname in ('activation_profiles','activation_support_requests','lifecycle_outbox','billing_checkout_attempts','operation_locks')`);
+assert.equal(security.rows.length,5); assert(security.rows.every(r=>r.relrowsecurity));
+await db.exec('set role authenticated');
+await assert.rejects(db.query(`select public.acquire_operation_lock('bad','00000000-0000-4000-8000-000000000001')`));
+console.log('PASS: migration applies; existing/live mirror evidence; backfill exclusion; consent defaults; lock exclusion/expiry; support deduplication; RLS and RPC restrictions.');
+await db.close();

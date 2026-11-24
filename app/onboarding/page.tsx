@@ -148,11 +148,11 @@ function OnboardingContent() {
 
   // Price display per cadence. Yearly saves ~17% vs paying monthly.
   const basicPrice = cadence === 'yearly'
-    ? { amount: '$40', unit: '/yr after trial', savings: 'Save $8 vs monthly', intent: 'basic_yearly' as const }
-    : { amount: '$4',  unit: '/mo after trial', savings: '',                    intent: 'basic_monthly' as const }
+    ? { amount: '$40', unit: '/yr', savings: 'Save $8 vs monthly', intent: 'basic_yearly' as const }
+    : { amount: '$4',  unit: '/mo', savings: '',                    intent: 'basic_monthly' as const }
   const proPrice = cadence === 'yearly'
-    ? { amount: '$100', unit: '/yr after trial', savings: 'Save $20 vs monthly', intent: 'pro_yearly' as const }
-    : { amount: '$10',  unit: '/mo after trial', savings: '',                     intent: 'pro_monthly' as const }
+    ? { amount: '$100', unit: '/yr', savings: 'Save $20 vs monthly', intent: 'pro_yearly' as const }
+    : { amount: '$10',  unit: '/mo', savings: '',                     intent: 'pro_monthly' as const }
 
   return (
     <>
@@ -162,7 +162,7 @@ function OnboardingContent() {
           <button className="ob-sign-out" onClick={signOut}>Sign out ({userEmail})</button>
           <div className="ob-brand">Cal<em>Connect</em></div>
           <h1 className="ob-title">Almost there — pick your <em>plan.</em></h1>
-          <p className="ob-sub">Start a 7-day free trial. $0 due today, cancel any time. We&apos;ll charge your card on day 7 unless you cancel.</p>
+          <p className="ob-sub">First-time subscribers get a 7-day free trial. Stripe will show your trial eligibility, first charge, and plan terms before you confirm.</p>
 
           {wasCancelled && (
             <div className="ob-cancel-banner">
@@ -209,7 +209,7 @@ function OnboardingContent() {
                 <li>Custom color and label per source calendar</li>
                 <li>Add calendars any time · $4/mo each</li>
               </ul>
-              <div className="ob-plan-trial">7 days free · cancel any time</div>
+              <div className="ob-plan-trial">7-day trial for first-time subscribers</div>
             </button>
 
             <button
@@ -228,7 +228,7 @@ function OnboardingContent() {
                 <li><strong>Backfill existing events</strong></li>
                 <li>Priority email support</li>
               </ul>
-              <div className="ob-plan-trial">7 days free · cancel any time</div>
+              <div className="ob-plan-trial">7-day trial for first-time subscribers</div>
             </button>
           </div>
 

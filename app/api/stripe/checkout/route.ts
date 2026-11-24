@@ -1,129 +1,117 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { stripe, STRIPE_PRICES } from '@/lib/stripe';
+import { withOperationLock } from '@/lib/operation-lock';
+import { baseItems, existingPurchases, isOpenSubscription } from '@/lib/billing/policy';
 
-/**
- * POST /api/stripe/checkout
- *
- * Creates a Stripe Checkout Session for one of:
- *   - Base plan subscription (basic monthly/yearly, pro monthly/yearly)
- *   - Extra Calendar add-on (quantity-based subscription)
- *
- * Body: { intent: 'basic_monthly' | 'basic_yearly' | 'pro_monthly' | 'pro_yearly' | 'extra_calendar', quantity?: number }
- *
- * Per rafter-secure-design:
- *   - Never trust client-supplied account_id — always take it from the server session
- *   - Use Stripe Checkout metadata.user_id to bind the purchase, verified in webhook
- *   - Reuse existing stripe_customer_id if the user has one (prevents duplicate customers)
- */
 export async function POST(req: NextRequest) {
+  const { data: { user } } = await createClient().auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const intent = String(body.intent || '');
+  const prices: Record<string, string> = {
+    basic_monthly: STRIPE_PRICES.basicMonthly, basic_yearly: STRIPE_PRICES.basicYearly,
+    pro_monthly: STRIPE_PRICES.proMonthly, pro_yearly: STRIPE_PRICES.proYearly,
+    extra_calendar: STRIPE_PRICES.extraCalendar,
+  };
+  const price = prices[intent];
+  const addon = intent === 'extra_calendar';
+  const quantity = addon ? Number(body.quantity ?? 1) : 1;
+  if (!price || !Number.isInteger(quantity) || quantity < 1 || quantity > 50)
+    return NextResponse.json({ error: 'Invalid plan or quantity' }, { status: 400 });
+  const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://www.calconnect.io';
+  const db = supabaseAdmin as any;
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await req.json().catch(() => ({}));
-    const intent = body?.intent as string;
-    const quantity = Math.max(1, Math.min(50, Number(body?.quantity) || 1));
-
-    const priceMap: Record<string, string> = {
-      basic_monthly: STRIPE_PRICES.basicMonthly,
-      basic_yearly: STRIPE_PRICES.basicYearly,
-      pro_monthly: STRIPE_PRICES.proMonthly,
-      pro_yearly: STRIPE_PRICES.proYearly,
-      extra_calendar: STRIPE_PRICES.extraCalendar,
-    };
-
-    const priceId = priceMap[intent];
-    if (!priceId) {
-      return NextResponse.json({ error: 'Invalid intent' }, { status: 400 });
-    }
-
-    // Reuse existing Stripe customer if the user already has one.
-    const { data: billing } = await (supabaseAdmin as any)
-      .from('user_billing')
-      .select('stripe_customer_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    let customerId: string | undefined = (billing as any)?.stripe_customer_id || undefined;
-
-    // Validate the stored customer id still exists in the *current* Stripe
-    // account/mode. Two ways this can go stale:
-    //   1) We switched Stripe modes (sandbox -> live) and the old id lives
-    //      only in sandbox. This is exactly what happened during the live
-    //      cutover on 2026-07-22.
-    //   2) A customer was manually deleted in the Stripe dashboard.
-    // In either case, treat it as "no customer" and create a fresh one.
-    if (customerId) {
-      try {
-        const existing = await stripe.customers.retrieve(customerId);
-        if ((existing as any).deleted) {
-          customerId = undefined;
-        }
-      } catch (err: any) {
-        const code = err?.code || err?.raw?.code;
-        const status = err?.statusCode || err?.raw?.statusCode;
-        if (code === 'resource_missing' || status === 404) {
-          console.log(
-            `stripe/checkout: stored customer ${customerId} not found in current Stripe account, creating a new one for user ${user.id}`,
-          );
-          customerId = undefined;
-        } else {
-          throw err;
-        }
+    return await withOperationLock(`billing:${user.id}`, async () => {
+      const { data: billing, error } = await db.from('user_billing').select('*').eq('user_id', user.id).maybeSingle();
+      if (error) throw error;
+      let customer = billing?.stripe_customer_id;
+      if (customer) {
+        // Fail closed if mapping is stale. Never silently create another customer.
+        const record = await stripe.customers.retrieve(customer);
+        if (record.deleted || (record.metadata.user_id && record.metadata.user_id !== user.id))
+          throw new Error('Your billing account needs a support check before checkout.');
+      } else {
+        const record = await stripe.customers.create({ email: user.email, metadata: { user_id: user.id } },
+          { idempotencyKey: `calconnect-customer-${user.id}` });
+        customer = record.id;
+        const saved = await db.from('user_billing').upsert({ user_id: user.id, stripe_customer_id: customer }, { onConflict: 'user_id' });
+        if (saved.error) throw saved.error;
       }
-    }
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email || undefined,
-        metadata: { user_id: user.id },
-      });
-      customerId = customer.id;
-      await (supabaseAdmin as any)
-        .from('user_billing')
-        .upsert({ user_id: user.id, stripe_customer_id: customerId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    }
-
-    const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://www.calconnect.io';
-
-    // 7-day free trial on Basic and Pro base plans. Extra-calendar add-ons
-    // don't get a trial — they're an incremental charge for existing subscribers.
-    // Stripe requires a card at checkout regardless (card captured, charged
-    // on day 7). If the customer has previously trialed with the same email +
-    // card, Stripe won't grant a second free trial automatically.
-    const isBasePlan = intent !== 'extra_calendar';
-    const trialDays = isBasePlan ? 7 : undefined;
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customerId,
-      line_items: [
-        intent === 'extra_calendar'
-          ? { price: priceId, quantity }
-          : { price: priceId, quantity: 1 },
-      ],
-      success_url: `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      // Back from Stripe checkout lands on /onboarding (or /dashboard for
-      // add-on flows). New signups should see the plan picker again, not
-      // get dumped on a free-plan dashboard they didn't realize they had.
-      cancel_url: intent === 'extra_calendar'
-        ? `${origin}/dashboard?checkout=cancelled`
-        : `${origin}/onboarding?checkout=cancelled`,
-      allow_promotion_codes: true,
-      // Bind this session to the user, checked in the webhook before we grant entitlements.
-      metadata: { user_id: user.id, intent },
-      subscription_data: {
-        metadata: { user_id: user.id, intent },
-        ...(trialDays ? { trial_period_days: trialDays } : {}),
-      },
+      const subs = await stripe.subscriptions.list({ customer, status: 'all', limit: 100 }).autoPagingToArray({ limit: 1000 });
+      if (subs.some(s => s.metadata?.user_id && s.metadata.user_id !== user.id)) throw new Error('Subscription ownership mismatch');
+      // Unrecognized live subscriptions need review, not a speculative new purchase.
+      if (subs.some(s => isOpenSubscription(s) && s.items.data.some(i =>
+        !baseItems(s).includes(i) && i.price.id !== STRIPE_PRICES.extraCalendar)))
+        throw new Error('Your existing subscription needs a support check before changing plans.');
+      const existing = existingPurchases(subs, addon);
+      if (existing.length > 1) return NextResponse.json({ error: 'Your account has more than one subscription for this plan type. Contact support so we can review it before making changes.' }, { status: 409 });
+      const open = await stripe.checkout.sessions.list({ customer, status: 'open', limit: 100 }).autoPagingToArray({ limit: 1000 });
+      // Retire legacy/untracked sessions before any new or upgrade flow.
+      const { data: attempt, error: attemptError } = await db.from('billing_checkout_attempts').select('*').eq('user_id', user.id).maybeSingle();
+      if (attemptError) throw attemptError;
+      for (const session of open) {
+        if (session.mode !== 'subscription') continue;
+        const keep = !existing.length && (attempt?.session_id === session.id || (!!attempt?.request_id && session.metadata?.attempt_id === attempt.request_id)) && attempt.intent === intent && attempt.quantity === quantity;
+        if (!keep) await stripe.checkout.sessions.expire(session.id);
+      }
+      if (existing.length) {
+        const sub = existing[0];
+        const item = addon ? sub.items.data.find(i => i.price.id === price) : baseItems(sub)[0];
+        const targetQuantity = addon ? (item?.quantity || 0) + quantity : quantity;
+        if (targetQuantity > 50) return NextResponse.json({ error: 'Contact support for more than 50 extra calendars.' }, { status: 400 });
+        const canConfirm = ['active', 'trialing'].includes(sub.status) && sub.items.data.length === 1 && item &&
+          (item.price.id !== price || item.quantity !== targetQuantity);
+        const portal = await stripe.billingPortal.sessions.create({ customer, return_url: `${origin}/dashboard`,
+          ...(canConfirm ? { flow_data: {
+            type: 'subscription_update_confirm' as const,
+            subscription_update_confirm: { subscription: sub.id, items: [{ id: item.id, price, quantity: targetQuantity }] },
+            after_completion: { type: 'redirect' as const, redirect: { return_url: `${origin}/dashboard?billing=updated` } },
+          } } : {}),
+        });
+        return NextResponse.json({ url: portal.url });
+      }
+      if (addon && !existingPurchases(subs, false).length && billing?.plan !== 'lifetime')
+        return NextResponse.json({ error: 'Choose a base plan before adding calendars.' }, { status: 409 });
+      let request = attempt;
+      const recovered = open.find(s => s.mode === 'subscription' && request?.request_id && s.metadata?.attempt_id === request.request_id);
+      if (recovered && request.intent === intent && request.quantity === quantity) {
+        const saved = await db.from('billing_checkout_attempts').update({ session_id: recovered.id }).eq('user_id', user.id);
+        if (saved.error) throw saved.error;
+        return NextResponse.json({ url: recovered.url });
+      }
+      if (request?.session_id) {
+        const previous = await stripe.checkout.sessions.retrieve(request.session_id);
+        if (previous.status === 'open' && request.intent === intent && request.quantity === quantity)
+          return NextResponse.json({ url: previous.url });
+        // A completed checkout can be awaiting subscription/webhook propagation.
+        if (previous.status === 'complete' && !subs.some(s => s.id === (typeof previous.subscription === 'string' ? previous.subscription : previous.subscription?.id))) return NextResponse.json({ error: 'Your previous checkout completed. Please refresh your billing before starting another purchase.' }, { status: 409 });
+        request = null;
+      }
+      if (request && (request.intent !== intent || request.quantity !== quantity || Date.now() - Date.parse(request.created_at) > 23 * 3600000))
+        throw new Error('A previous checkout needs reconciliation. Please contact support before trying another purchase.');
+      if (!request) {
+        request = { user_id: user.id, request_id: randomUUID(), intent, quantity, session_id: null, created_at: new Date().toISOString() };
+        const saved = await db.from('billing_checkout_attempts').upsert(request);
+        if (saved.error) throw saved.error;
+      }
+      // Persisted attempt means retries use the same Stripe idempotency key.
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription', customer, line_items: [{ price, quantity }],
+        success_url: `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/${addon ? 'dashboard' : 'onboarding'}?checkout=cancelled`,
+        allow_promotion_codes: true,
+        metadata: { user_id: user.id, intent, attempt_id: request.request_id },
+        subscription_data: { metadata: { user_id: user.id, intent },
+          ...(!addon && !subs.some(s => baseItems(s).length) ? { trial_period_days: 7 } : {}) },
+      }, { idempotencyKey: `calconnect-checkout-${request.request_id}` });
+      const saved = await db.from('billing_checkout_attempts').update({ session_id: session.id }).eq('user_id', user.id);
+      if (saved.error) throw saved.error;
+      return NextResponse.json({ url: session.url });
     });
-
-    return NextResponse.json({ url: session.url });
-  } catch (err: any) {
-    console.error('stripe/checkout error:', err);
-    return NextResponse.json({ error: err?.message || 'Internal error' }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Billing could not continue safely. Please retry shortly or contact support. If you already have a subscription, we will not start a second one.' }, { status: 503 });
   }
 }

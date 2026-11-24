@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import ActivationChecklist from '@/components/ActivationChecklist'
 import { createBrowserClient } from '@supabase/ssr'
 import { useSearchParams } from 'next/navigation'
 
@@ -227,6 +228,21 @@ export default function DashboardPage() {
       setTimeout(() => setStatus(''), 3000)
     }
   }, [])
+
+  useEffect(() => {
+    if (searchParams.get('billing') !== 'updated') return
+    setStatus('Plan change submitted. Updating your billing details…')
+    let canceled = false
+    let attempts = 0
+    const timer = setInterval(async () => {
+      try {
+        const response = await fetch('/api/billing', { cache: 'no-store' })
+        if (response.ok && !canceled) setBilling(await response.json())
+      } catch { /* The next refresh can recover a temporary network failure. */ }
+      if (++attempts >= 10) { clearInterval(timer); if (!canceled) setStatus('Billing details refreshed. Stripe shows the final charges and plan terms.') }
+    }, 2000)
+    return () => { canceled = true; clearInterval(timer) }
+  }, [searchParams])
 
   const pollBillingUntilActive = async (maxAttempts: number) => {
     for (let i = 0; i < maxAttempts; i++) {
@@ -892,8 +908,10 @@ export default function DashboardPage() {
         )
       })()}
 
+      <ActivationChecklist onConnect={connectAccount} />
+
       {/* Connected Accounts */}
-      <div style={{
+      <div id="connected-accounts" style={{
         background: 'white',
         padding: '1.5rem',
         borderRadius: '8px',
@@ -1438,7 +1456,7 @@ export default function DashboardPage() {
           </ul>
         )}
 
-        {accounts.length < 5 && (
+        {accounts.length < Math.max(billing?.entitled_calendars || 0, billing?.plan === 'free' ? 2 : 0) && (
           <button
             onClick={connectAccount}
             disabled={actionLoading}
@@ -1831,7 +1849,7 @@ export default function DashboardPage() {
                 <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$4/mo</div>
                 <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>3 calendars</div>
                 {billing?.plan === 'free' && (
-                  <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7 days free · cancel any time</div>
+                  <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7-day trial for first-time subscribers</div>
                 )}
               </button>
 
@@ -1847,7 +1865,7 @@ export default function DashboardPage() {
                 <div style={{ fontSize: '1.25rem', fontWeight: 500, color: '#14140f', marginTop: '0.25rem' }}>$10/mo</div>
                 <div style={{ fontSize: '0.8rem', color: '#4a4a45' }}>10 calendars + custom colors</div>
                 {billing?.plan === 'free' && (
-                  <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7 days free · cancel any time</div>
+                  <div style={{ fontSize: '0.75rem', color: '#1e5f22', marginTop: '0.4rem', fontWeight: 500 }}>7-day trial for first-time subscribers</div>
                 )}
               </button>
             </div>
@@ -1869,7 +1887,7 @@ export default function DashboardPage() {
 
             {checkoutLoading && (
               <div style={{ fontSize: '0.85rem', color: '#4a4a45', textAlign: 'center', marginBottom: '0.5rem' }}>
-                Redirecting to Stripe checkout…
+                Opening Stripe to review your billing…
               </div>
             )}
 

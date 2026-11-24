@@ -1,18 +1,20 @@
-import { Gelasio, Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 
-const gelasio = Gelasio({
-  weight: ['400', '500'],
-  style: ['normal', 'italic'],
-  subsets: ['latin'],
-  variable: '--font-serif-display',
-  display: 'swap',
+// Pin the existing fonts locally so builds do not depend on Google CSS URL formats.
+const gelasio = localFont({
+  src: [
+    { path: './fonts/gelasio-400-normal.ttf', weight: '400', style: 'normal' },
+    { path: './fonts/gelasio-500-normal.ttf', weight: '500', style: 'normal' },
+    { path: './fonts/gelasio-400-italic.ttf', weight: '400', style: 'italic' },
+    { path: './fonts/gelasio-500-italic.ttf', weight: '500', style: 'italic' },
+  ], variable: '--font-serif-display', display: 'swap',
 })
-
-const inter = Inter({
-  weight: ['400', '500', '600'],
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
+const inter = localFont({
+  src: [
+    { path: './fonts/inter-400-normal.ttf', weight: '400', style: 'normal' },
+    { path: './fonts/inter-500-normal.ttf', weight: '500', style: 'normal' },
+    { path: './fonts/inter-600-normal.ttf', weight: '600', style: 'normal' },
+  ], variable: '--font-inter', display: 'swap',
 })
 
 export const metadata = {

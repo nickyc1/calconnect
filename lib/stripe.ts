@@ -7,6 +7,8 @@ if (!process.env.STRIPE_SECRET_KEY) {
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
   apiVersion: '2025-01-27.acacia' as any,
   typescript: true,
+  timeout: 20000,
+  maxNetworkRetries: 1,
 });
 
 export const STRIPE_PRICES = {
@@ -34,6 +36,7 @@ export const PLAN_BASE_CALENDARS: Record<string, number> = {
  * (e.g., it's the Extra Calendar price, which is an add-on, not a base plan).
  */
 export function priceIdToPlan(priceId: string): { plan: 'basic' | 'pro'; baseCalendars: number } | null {
+  if (!priceId) return null;
   if (priceId === STRIPE_PRICES.basicMonthly || priceId === STRIPE_PRICES.basicYearly) {
     return { plan: 'basic', baseCalendars: PLAN_BASE_CALENDARS.basic };
   }

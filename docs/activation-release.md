@@ -1,0 +1,125 @@
+# Billing and activation release — staged, not deployed
+
+This branch changes code only. No Stripe customer, subscription, invoice, refund,
+production database, sender account, or customer email has been changed. Eric's
+Basic and Pro subscriptions must remain untouched in this release.
+
+## Release review
+
+| Target | Proposed operation | Parameters / intended effect | Status |
+| --- | --- | --- | --- |
+| Supabase production | Apply migration 022 | Add durable billing locks/checkout attempts, lifetime entitlement flag, private activation/support/outbox tables, first-live-mirror trigger. Backfill milestone evidence only; no email enrollment. | Awaiting approval |
+| Stripe Billing Portal | Verify configuration, stage any required changes | Allow existing Basic/Pro price changes and addon quantity changes; configure the intended proration policy. Existing-item confirmation must work before opening upgrades to customers. Do not create/cancel/refund subscriptions. | Read-only verification still needed; mutations require approval |
+| Existing CalConnect deployment | Release exact reviewed commit after migration | Billing fixes, dashboard checklist, support queue, `/admin/activation`; set `CALCONNECT_ADMIN_EMAILS` to the owner's verified login email. Keep `LIFECYCLE_EMAIL_ENABLED=false`. | Awaiting approval |
+| Email provider | Configure optional Resend transport | Verified sender, monitored reply-to, business postal address, API/signing secrets; verified webhook `/api/lifecycle/webhook` for bounced, complained, suppressed events. No credentials in source. | Not configured; separate approval |
+| Lifecycle email delivery | Enable only after provider setup and recipient/copy review | `LIFECYCLE_EMAIL_ENABLED=true`; optional scheduled GET `/api/cron/lifecycle` with CRON_SECRET; maximum two approved recipients per run. No cron was added in this branch. | Disabled |
+| Existing customers | Review enrollment individually | Explicit email opt-in required. Operator enrolls in existing-customer sequence, prepares the next email, reads recipient/copy, then approves that message. | No customers enrolled |
+| Eric's billing | No operation | No cancellation, refund, credit, subscription update, or customer merge. Existing duplicates return a support-review error. | Excluded |
+
+## What changed
+
+* Checkout reads all subscriptions. Nonterminal base plans go to the existing
+  subscription's confirmation flow; two base subscriptions require human review.
+  A portal error cannot fall back to new checkout. Extra calendars update an
+  existing addon quantity when possible. Unsupported multi-item/status cases use
+  Stripe's general billing portal rather than creating another subscription.
+* A service-only database lock serializes billing requests. Durable checkout
+  attempts provide Stripe idempotency keys and recover open sessions after DB
+  save failure. Stale mappings and ambiguous old attempts fail closed. Only
+  first-time base subscribers receive the trial.
+* Webhooks compute access from current, paginated Stripe subscriptions, retaining
+  the strongest valid plan and lifetime access. Deleting Basic cannot erase Pro.
+  Database or Stripe failures return a retryable response. No bulk reconciliation
+  or cleanup of existing subscriptions is performed by this release.
+* Setup follows connected calendars, unexpired Source watches, reauthorization,
+  first live mirror, and explicit visual confirmation. Historical backfill and
+  empty recurring markers do not count as a first live mirror.
+* Help requests record the customer's message and a minimal setup snapshot, not
+  tokens or event contents. The admin queue shows the user's email and open
+  requests. A monitored support inbox remains available by mail link. The queue
+  must be checked by the operator; no support-notification email is sent yet.
+* The connect button now respects the plan's actual allowance instead of a fixed
+  five-account cap. The existing Google fonts are bundled with their OFL licenses
+  because the installed Next font loader failed on Google's current CSS URLs.
+
+## Email sequence and review operation
+
+Product voice: CalConnect Support. No claims written in Nick's personal voice.
+Unchecked email opt-in is on the dashboard. New signups opting in within 14 days
+can enter the new-user cohort. Older customers need operator enrollment after
+opt-in. Known internal accounts/plus aliases are excluded at candidate creation.
+
+| Sequence | Eligible timing | Purpose |
+| --- | --- | --- |
+| Welcome | First eligible review after new-user enrollment | Connect calendars and try one busy block |
+| Next step | At least 24 hours after enrollment | Branch on zero/one calendar, missing Source, or test event |
+| Help | At least 72 hours after enrollment | Offer setup assistance; replaces a missed next-step reminder |
+| Success | Confirmed first busy block | Explain background operation and optional two-way mirroring; once |
+| Existing 1 | Reviewed enrollment, incomplete setup | Resume the exact missing step |
+| Existing 2 | At least 7 days after enrollment | Final reminder, then stop |
+
+New setup reminders stop at 7 days. Existing reminders stop at 14 days. At most
+one email per 24 hours, including success. An observed live mirror stops setup
+reminders even before visual confirmation. Open support, reauthorization,
+unsubscribe, suppression, lack of entitlement, and revoked lifetime codes pause
+or exclude delivery. No email is based solely on absence of dashboard logins.
+
+The admin UI at `/admin/activation` prepares each eligible email for review;
+it does not prepare/send the entire sequence automatically. Approved messages
+are rechecked at send time against fresh eligibility and exact recipient, copy,
+sender, reply-to, and address. Stale messages become `skipped` and require a fresh
+review. Delivery remains disabled until environment configuration and scheduling
+are explicitly approved. This is a deliberate review-first rollout.
+
+Unknown provider responses and interrupted `sending` rows block further sends
+for that user. Reconcile those rows with provider receipts manually; never reset
+an ambiguous row blindly. Provider idempotency lasts only 24 hours. Bounce and
+complaint callbacks are signature verified, and unsubscribe GET only renders a
+confirmation; POST changes preferences and supports one-click unsubscribe.
+
+## Validation
+
+Use Node 22.23.x (the repository's engine requirement).
+
+```
+npm ci
+npm test -- --runInBand
+npm run test:db
+npm run build
+```
+
+`test:db` runs migration 022 against an isolated PGlite database, not Supabase.
+It verifies milestone exclusions, consent defaults, lock contention/expiry,
+support-request deduplication, RLS, and restricted RPC access. Jest covers upgrade
+routing, existing duplicates, idempotent recovery, failure behavior, aggregated
+entitlements, sequence eligibility, unsubscribe integrity, disabled delivery, and
+webhook authentication.
+
+The real checklist component was exercised in headless Chrome with mocked APIs,
+at 390px and 1100px. Verified connect action, unchecked default, opt-in, support
+submission, hide/reopen, visual confirmation, no mobile overflow, and no browser
+errors. This is not an authenticated end-to-end production test.
+
+Before production enablement, verify a Stripe test-mode Basic→Pro confirmation,
+same-plan request, addon increment, two concurrent checkout requests, canceled
+checkout retry, and webhook replay with the actual portal configuration. This
+requires approved test-account operations; no paid customer is a test fixture.
+After deployment, verify authenticated onboarding/support in a designated test
+user. Release email delivery separately with an explicitly approved internal
+recipient, verified sender/webhook, and unsubscribe check.
+
+## Operational limits / rollback
+
+The migration is additive; apply it before deploying the code. Do not drop tables
+while the new code is running. On rollback, turn email delivery off, stop its
+schedule if one was added, and preserve outbox receipts. An old checkout route
+reintroduces duplicate-subscription risk; prefer disabling checkout temporarily
+over restoring the buggy route. Do not remove or reset a billing lock while its
+request is still running. Ambiguous checkout attempts should be reconciled in
+Stripe before clearing them.
+
+Existing dependency warnings/audit findings were not upgraded as part of this
+bounded change. Build output also includes existing dynamic-route prerender
+messages and a Browserslist warning; they do not fail the build. No Rafter scan
+was run because this was implementation work, not an explicit final public-launch
+review request.
