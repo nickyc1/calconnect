@@ -152,3 +152,24 @@ Production migration verification: five new tables have RLS, zero queued emails,
 zero enrolled or opted-in profiles. Read-only comparison against the original
 Stripe snapshot confirmed all live subscription statuses, item IDs, prices,
 quantities and cancellation settings unchanged, including Eric.
+
+## Existing active customer guidance (activation-v2)
+
+Delivery remains disabled; no schedule, enrollment, or recipient approval is
+created by this update. Help copy now asks whether the customer needs help;
+success and engagement emails link with “Open your dashboard”.
+
+Explicitly enrolled existing customers with email consent, a recorded live mirror,
+a confirmed first busy block, and currently healthy connections can receive three
+reviewed tips after the success email. Timing uses the later of enrollment and
+confirmation: day 7 (Source direction), day 21 (schedule changes), day 45 (support
+check-in). Missed windows are skipped; eligibility ends at day 60. Engagement
+messages are at least seven days after any previous email. Existing suppression,
+reauthorization, support, entitlement, verified-email and internal-account rules
+still apply. This is a bounded tips series, not an indefinitely recurring campaign.
+
+The admin enrollment label now describes existing-customer guidance, including
+both unfinished setup and confirmed-active branches. No schema migration needed.
+42 tests pass, including engagement timing, missed windows, consent, current setup
+health, weekly spacing and CTA selection. No billing code or customer billing
+records changed.
