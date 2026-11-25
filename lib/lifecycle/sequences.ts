@@ -3,17 +3,17 @@ export const SEQUENCE_VERSION = 'activation-v3';
 export const DAY = 86400000;
 export type Step = 'welcome' | 'next_step' | 'help' | 'success' | 'existing_1' | 'existing_2' | 'active_1' | 'active_2' | 'active_3';
 export function nextStep(state: ActivationState, profile: any, sent: string[], now = Date.now()): Step | null {
-  if (!profile?.email_opt_in_at || profile.unsubscribed_at || profile.suppressed || !profile.enrolled_at ||
+  if ((!profile?.email_opt_in_at && !profile?.tips_opt_in_at) || profile.unsubscribed_at || profile.suppressed || !profile.enrolled_at ||
     !state.entitled || state.supportOpen || state.needsReauth) return null;
   if (profile.last_email_at && now - Date.parse(profile.last_email_at) < DAY) return null;
   const age = now - Date.parse(profile.enrolled_at);
   if (age < 0) return null;
   if (state.confirmedAt) {
-    if (!sent.includes('success')) return 'success';
+    if (profile.email_opt_in_at && !sent.includes('success')) return 'success';
     // Existing customers enter through explicit operator enrollment. Never infer
     // ongoing health from an old confirmation when current connections are broken.
-    if (profile.cohort !== 'existing' || state.stage !== 'complete' || !state.firstMirrorAt) return null;
-    const activeAge = now - Math.max(Date.parse(state.confirmedAt), Date.parse(profile.enrolled_at));
+    if (!profile.tips_opt_in_at || profile.cohort !== 'existing' || state.stage !== 'complete' || !state.firstMirrorAt) return null;
+    const activeAge = now - Math.max(Date.parse(state.confirmedAt), Date.parse(profile.enrolled_at), Date.parse(profile.tips_opt_in_at));
     if (!Number.isFinite(activeAge) || activeAge < 0 || activeAge >= 60 * DAY) return null;
     if (profile.last_email_at && now - Date.parse(profile.last_email_at) < 7 * DAY) return null;
     // Skip missed windows rather than sending a backlog of tips.
@@ -22,6 +22,7 @@ export function nextStep(state: ActivationState, profile: any, sent: string[], n
     if (activeAge >= 7 * DAY) return sent.includes('active_1') ? null : 'active_1';
     return null;
   }
+  if (!profile.email_opt_in_at) return null;
   // Live mirrors stop setup reminders, even before the customer confirms visually.
   if (state.firstMirrorAt) return null;
   if (profile.cohort === 'existing') {

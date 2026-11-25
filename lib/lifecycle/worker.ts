@@ -61,7 +61,7 @@ export async function queueEligible(deadline: number) {
   let queued = 0, offset = 0;
   while (Date.now() < deadline) {
     const profiles = await db.from('activation_profiles').select('user_id')
-      .not('email_opt_in_at', 'is', null).not('enrolled_at', 'is', null)
+      .or('email_opt_in_at.not.is.null,tips_opt_in_at.not.is.null').not('enrolled_at', 'is', null)
       .is('unsubscribed_at', null).eq('suppressed', false).order('user_id').range(offset, offset + 99);
     if (profiles.error) throw profiles.error;
     for (let i = 0; i < profiles.data.length; i += 5) {

@@ -9,7 +9,8 @@ export async function GET() {
   try {
     const { profile, state } = await activationContext(user.id);
     return NextResponse.json({ state, dismissed: profile?.dismissed || false,
-      emailOptIn: !!profile?.email_opt_in_at && !profile?.unsubscribed_at });
+      emailOptIn: !!profile?.email_opt_in_at && !profile?.unsubscribed_at,
+      tipsOptIn: !!profile?.tips_opt_in_at && !profile?.unsubscribed_at });
   } catch { return NextResponse.json({ error: 'Setup status is temporarily unavailable.' }, { status: 503 }); }
 }
 export async function POST(req: NextRequest) {
@@ -24,11 +25,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Wait for a successful mirror before confirming.' }, { status: 409 });
       patch.confirmed_at = profile?.confirmed_at || new Date().toISOString();
     } else if (body.action === 'dismiss') patch.dismissed = body.value === true;
-    else if (body.action === 'email_preference' && typeof body.value === 'boolean') {
-      patch.email_opt_in_at = body.value ? new Date().toISOString() : null;
-      patch.unsubscribed_at = body.value ? null : new Date().toISOString();
+    else if (['email_preference', 'tips_preference'].includes(body.action) && typeof body.value === 'boolean') {
+      // Each choice changes only its own topic. An explicit opt-in clears global unsubscribe.
+      patch[body.action === 'tips_preference' ? 'tips_opt_in_at' : 'email_opt_in_at'] = body.value ? new Date().toISOString() : null;
+      if (body.value) patch.unsubscribed_at = null;
       // Older customers require explicit operator enrollment after review.
-      if (body.value && !profile?.enrolled_at && Date.now() - Date.parse(user.created_at) < 14 * 86400000) {
+      if (body.action === 'email_preference' && body.value && !profile?.enrolled_at && Date.now() - Date.parse(user.created_at) < 14 * 86400000) {
         patch.cohort = 'new'; patch.enrolled_at = new Date().toISOString();
       }
     } else return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

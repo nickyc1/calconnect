@@ -12,7 +12,7 @@ const copy = {
   complete: ['Your calendars are connected', 'New busy events from your Source calendar now have a path to your other calendar. CalConnect works in the background.'],
 } as const;
 export default function ActivationChecklist({ onConnect }: { onConnect: () => void }) {
-  const [data, setData] = useState<{ state: ActivationState; dismissed: boolean; emailOptIn: boolean } | null>(null);
+  const [data, setData] = useState<{ state: ActivationState; dismissed: boolean; emailOptIn: boolean; tipsOptIn: boolean } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
@@ -59,8 +59,9 @@ export default function ActivationChecklist({ onConnect }: { onConnect: () => vo
         s.stage === 'confirm' ? <button disabled={busy} onClick={() => save('confirm')}>I can see the busy block</button> : null}
     </>}
     <div style={{ marginTop: 18 }}>
-      <label><input type="checkbox" disabled={busy} checked={data.emailOptIn} onChange={e => save('email_preference', e.target.checked)} /> Email me setup tips and occasional calendar guidance. Unsubscribe anytime.</label>
+      <label><input type="checkbox" disabled={busy} checked={data.emailOptIn} onChange={e => save('email_preference', e.target.checked)} /> Email me help finishing calendar setup. Stop these emails anytime.</label>
     </div>
+    <div style={{ marginTop: 12 }}><label><input type="checkbox" disabled={busy} checked={!!data.tipsOptIn} onChange={e => save('tips_preference', e.target.checked)} /> Email me optional calendar tips after setup. Unsubscribe anytime.</label></div>
     <p><button onClick={() => setHelp(!help)}>Get setup help</button></p>
     {help && <div>
       {s.supportOpen ? <p>Your request is in the support queue. Setup reminders are paused. You can also <a href="mailto:n.christensen4@gmail.com?subject=CalConnect%20setup%20help">email support</a>.</p> : <form onSubmit={async e => {

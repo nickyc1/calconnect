@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const results = await Promise.all([
       db.from('activation_support_requests').select('*').is('resolved_at', null).order('created_at').range(offset, offset + 99),
       db.from('lifecycle_outbox').select('*').order('created_at', { ascending: false }).range(offset, offset + 99),
-      db.from('activation_profiles').select('*').not('email_opt_in_at', 'is', null).is('unsubscribed_at', null).order('created_at').range(offset, offset + 99),
+      db.from('activation_profiles').select('*').or('email_opt_in_at.not.is.null,tips_opt_in_at.not.is.null').is('unsubscribed_at', null).order('created_at').range(offset, offset + 99),
     ]);
     for (const r of results) if (r.error) throw r.error;
     const ids = [...new Set<string>([...results[0].data, ...results[2].data].map((r: any) => r.user_id))];
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       if (r.error) throw r.error;
     } else if (body.action === 'enroll_existing') {
       const r = await db.from('activation_profiles').update({ cohort: 'existing', enrolled_at: new Date().toISOString() })
-        .eq('user_id', body.userId).not('email_opt_in_at', 'is', null).is('unsubscribed_at', null).is('enrolled_at', null).eq('suppressed', false);
+        .eq('user_id', body.userId).or('email_opt_in_at.not.is.null,tips_opt_in_at.not.is.null').is('unsubscribed_at', null).is('enrolled_at', null).eq('suppressed', false);
       if (r.error) throw r.error;
     } else if (body.action === 'prepare') {
       await withOperationLock(`lifecycle:${body.userId}`, async () => {

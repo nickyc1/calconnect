@@ -9,8 +9,9 @@ create table public.event_mappings(user_id uuid, via_backfill boolean default fa
 insert into auth.users values ('00000000-0000-4000-8000-000000000001'),('00000000-0000-4000-8000-000000000002');
 insert into event_mappings values ('00000000-0000-4000-8000-000000000001',false,'[{"id":"old"}]','2026-11-01');`);
 await db.exec(readFileSync(new URL('../supabase/migrations/022_billing_and_activation.sql', import.meta.url),'utf8'));
+await db.exec(readFileSync(new URL('../supabase/migrations/023_email_topics.sql', import.meta.url),'utf8'));
 let r = await db.query('select * from activation_profiles');
-assert.equal(r.rows.length,1); assert.equal(r.rows[0].enrolled_at,null); assert.equal(r.rows[0].email_opt_in_at,null);
+assert.equal(r.rows[0].tips_opt_in_at,null); assert.equal(r.rows.length,1); assert.equal(r.rows[0].enrolled_at,null); assert.equal(r.rows[0].email_opt_in_at,null);
 await db.exec(`insert into event_mappings(user_id,via_backfill,mirrored_events) values
  ('00000000-0000-4000-8000-000000000002',true,'[{"id":"backfill"}]'),
  ('00000000-0000-4000-8000-000000000002',false,'[]');`);

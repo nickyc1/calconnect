@@ -23,8 +23,8 @@ export default function ActivationAdmin() {
       <p>{data.emails[r.user_id]} · {r.created_at}</p><p>{r.message}</p><pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(r.snapshot, null, 2)}</pre>
       <button disabled={busy} onClick={() => act({ action: 'resolve', id: r.id })}>Mark resolved; resume eligible reminders</button>
     </article>)}
-    <h2>Email enrollment</h2><p>Incomplete setup: two reminders. Confirmed active setup: success email, then three tips at 7, 21 and 45 days after enrollment or confirmation, whichever is later. Every message requires review; delivery stays controlled by the server email switch.</p>{data?.profiles.map((p: any) => <article key={p.user_id} style={{ padding: 12 }}>
-      <span>{data.emails[p.user_id]} · {p.cohort || 'Not enrolled'} · consent {p.email_opt_in_at} </span>
+    <h2>Email enrollment</h2><p>Incomplete setup: two reminders. Confirmed active setup: success email with setup consent; separate tips consent is required for three tips at 7, 21 and 45 days after enrollment or confirmation, whichever is later. Every message requires review; delivery stays controlled by the server email switch.</p>{data?.profiles.map((p: any) => <article key={p.user_id} style={{ padding: 12 }}>
+      <span>{data.emails[p.user_id]} · {p.cohort || 'Not enrolled'} · setup consent {p.email_opt_in_at || 'none'} · optional tips consent {p.tips_opt_in_at || 'none'} </span>
       {!p.enrolled_at && <button disabled={busy} onClick={() => act({ action: 'enroll_existing', userId: p.user_id })}>Enroll in existing-customer guidance</button>}
       {p.enrolled_at && <button disabled={busy} onClick={() => act({ action: 'prepare', userId: p.user_id })}>Prepare next email for review</button>}
     </article>)}

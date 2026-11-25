@@ -42,7 +42,7 @@ async function main() {
   // A fixed marker makes this invocation non-repeatable after a successful/ambiguous send.
   const old=await query(db.from('lifecycle_outbox').select('status').eq('user_id',user.id).like('step',marker+'%'));
   assert.equal(old.length,0,'This test already has receipts; reconcile before another run');
-  const fields=['email_opt_in_at','unsubscribed_at','cohort','enrolled_at','last_email_at'];
+  const fields=['email_opt_in_at','tips_opt_in_at','unsubscribed_at','cohort','enrolled_at','last_email_at'];
   const restore=Object.fromEntries(fields.map(k=>[k,before?.[k]??null]));
   const fixture={stage:'first_calendar',calendars:0,sources:0,readySources:0,entitled:true,needsReauth:false,firstMirrorAt:null,confirmedAt:null,supportOpen:false};
   const resolve=async id=>{

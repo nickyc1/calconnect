@@ -50,7 +50,7 @@ test('unsubscribe tokens cannot be altered or used for another user', () => {
 });
 
 const activeState = { ...state, stage: 'complete' as const, firstMirrorAt: new Date(now - 100 * DAY).toISOString(), confirmedAt: new Date(now - 100 * DAY).toISOString() };
-const activeProfile = { ...profile, cohort: 'existing', enrolled_at: new Date(now).toISOString() };
+const activeProfile = { ...profile, tips_opt_in_at: profile.email_opt_in_at, cohort: 'existing', enrolled_at: new Date(now).toISOString() };
 test('active guidance uses later enrollment/confirmation with bounded windows and no backlog', () => {
   for (const [day, expected] of [[0,null],[6,null],[7,'active_1'],[20,'active_1'],[21,'active_2'],[44,'active_2'],[45,'active_3'],[59,'active_3'],[60,null]] as const)
     expect(nextStep(activeState, activeProfile, ['success'], now + day * DAY)).toBe(expected);
@@ -59,7 +59,7 @@ test('active guidance uses later enrollment/confirmation with bounded windows an
   expect(nextStep(activeState, activeProfile, ['success','active_3'], now + 50 * DAY)).toBeNull();
 });
 test('active guidance requires consent, healthy setup, existing enrollment and weekly spacing', () => {
-  for (const override of [{ email_opt_in_at:null },{ unsubscribed_at:'yes' },{ suppressed:true },{ cohort:'new' },{ enrolled_at:null },{ last_email_at:new Date(now + 19 * DAY).toISOString() }])
+  for (const override of [{ tips_opt_in_at:null },{ unsubscribed_at:'yes' },{ suppressed:true },{ cohort:'new' },{ enrolled_at:null },{ last_email_at:new Date(now + 19 * DAY).toISOString() }])
     expect(nextStep(activeState, { ...activeProfile, ...override }, ['success'], now + 21 * DAY)).toBeNull();
   for (const override of [{ supportOpen:true },{ needsReauth:true },{ entitled:false },{ stage:'source' as const },{ firstMirrorAt:null }])
     expect(nextStep({ ...activeState, ...override }, activeProfile, ['success'], now + 21 * DAY)).toBeNull();
@@ -72,4 +72,13 @@ test('success and active tips use dashboard CTA; help uses supportive copy', () 
     expect(copy).toContain('Open your dashboard: https://example.com/dashboard');
     expect(copy).not.toContain('Continue setup:');
   }
+});
+
+// Signup alone is not permission, and neither topic implies consent to the other.
+test('setup and optional engagement consent are independent', () => {
+  expect(nextStep(state, { ...profile, email_opt_in_at: null, tips_opt_in_at: profile.email_opt_in_at }, [], now)).toBeNull();
+  expect(nextStep(activeState, { ...activeProfile, tips_opt_in_at: null }, ['success'], now + 21 * DAY)).toBeNull();
+  expect(nextStep(activeState, { ...activeProfile, email_opt_in_at: null }, [], now + 21 * DAY)).toBe('active_2');
+  expect(nextStep(activeState, { ...activeProfile, email_opt_in_at: null, unsubscribed_at: 'yes' }, [], now + 21 * DAY)).toBeNull();
+  expect(nextStep(state, { ...profile, email_opt_in_at: null }, [], now)).toBeNull();
 });

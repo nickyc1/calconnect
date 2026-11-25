@@ -204,3 +204,41 @@ unsubscribe GET, and one-click unsubscribe POST. Original email preference value
 were restored; no calendar or billing state changed. The scheduled worker remains
 disabled in production until the postal address and customer activation are ready.
 Earlier release-check sections above describe their historical release snapshots.
+
+## November 25: separate setup help and optional tips — staged
+
+Signup review: current email and Google signup code has no setup/tips consent
+control. Login consent refers only to connecting Google Calendar. The privacy
+policy since its initial commit (52e0a5d) describes billing, security and major
+product-change emails, not onboarding campaigns or optional tips. Repository
+history is evidence of implementation, not a per-customer record of terms accepted.
+The previous dashboard checkbox bundled setup tips and occasional guidance.
+
+Resend AUP (checked November 25): all recipients must explicitly opt in to
+communications. Its consent guidance says providing an email or a clause in terms
+is insufficient. No documented exception was found for a delayed campaign to old
+zero-calendar accounts. No Resend support confirmation has been requested.
+Sources: https://resend.com/legal/acceptable-use and
+https://resend.com/blog/how-to-properly-get-email-consent
+
+The split keeps email_opt_in_at as setup consent; tips_opt_in_at separately gates
+active_1/2/3. Neither choice grants the other. No inferred consent/backfill.
+Success is a setup email. Tips-only consent does not send success or setup nudges.
+Tips timing begins at the latest of confirmation, enrollment and tips consent.
+The dashboard provides independent unchecked controls. Older users still require
+operator enrollment. Unsubscribe links clearly stop both topics; the dashboard
+can stop either individually. Provider suppression and frequency caps cover both.
+Existing scheduled delivery and automation switches remain OFF.
+
+| Target | Exact operation | Intended effect | Approval |
+| --- | --- | --- | --- |
+| Supabase production activation_profiles | Apply migration 023: ADD COLUMN tips_opt_in_at timestamptz, nullable, no default/backfill | Store independent optional-tips consent; existing values remain untouched | Awaiting Nick review |
+| Existing CalConnect deployment | Deploy this topic split after migration 023; retain LIFECYCLE_EMAIL_ENABLED=false and LIFECYCLE_AUTOMATION_ENABLED off | Show independent choices; enforce topic eligibility | Depends on schema approval |
+
+Do not deploy this code before migration 023: queries for the new column require
+it. No email, signup consent, enrollment, or billing mutations are part of this
+release. Mailing address and separate sending authorization are still outstanding.
+
+Validation for the staged split: 52 Jest tests passed; migrations 022 and 023
+passed the isolated database check; production build passed. No production
+migration, deployment, enrollment or email send performed for this split.
