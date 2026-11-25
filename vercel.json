@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/renew-watches",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/lifecycle",
+      "schedule": "0 14 * * *"
     }
   ]
 }

@@ -12,9 +12,9 @@ been changed. Eric's Basic and Pro subscriptions remain untouched.
 | Supabase production | Apply migration 022 | Add durable billing locks/checkout attempts, lifetime entitlement flag, private activation/support/outbox tables, first-live-mirror trigger. Backfill milestone evidence only; no email enrollment. | Approved for release |
 | Stripe Billing Portal | Verify configuration, stage any required changes | Allow existing Basic/Pro price changes and addon quantity changes; configure the intended proration policy. Existing-item confirmation must work before opening upgrades to customers. Do not create/cancel/refund subscriptions. | Approved and configured |
 | Existing CalConnect deployment | Release exact reviewed commit after migration | Billing fixes, dashboard checklist, support queue, `/admin/activation`; set `CALCONNECT_ADMIN_EMAILS` to the owner's verified login email. Keep `LIFECYCLE_EMAIL_ENABLED=false`. | Approved for release |
-| Email provider | Configure optional Resend transport | Verified sender, monitored reply-to, business postal address, API/signing secrets; verified webhook `/api/lifecycle/webhook` for bounced, complained, suppressed events. No credentials in source. | Not configured; separate approval |
-| Lifecycle email delivery | Enable only after provider setup and recipient/copy review | `LIFECYCLE_EMAIL_ENABLED=true`; optional scheduled GET `/api/cron/lifecycle` with CRON_SECRET; maximum two approved recipients per run. No cron was added in this branch. | Disabled |
-| Existing customers | Review enrollment individually | Explicit email opt-in required. Operator enrolls in existing-customer sequence, prepares the next email, reads recipient/copy, then approves that message. | No customers enrolled |
+| Email provider | Configure optional Resend transport | Verified sender, monitored reply-to, business postal address, API/signing secrets; verified webhook `/api/lifecycle/webhook` for bounced, complained, suppressed events. No credentials in source. | Provider configured and owner-tested; postal address pending |
+| Lifecycle email delivery | Enable only after provider setup and recipient/copy review | Daily 14:00 UTC GET `/api/cron/lifecycle` with CRON_SECRET; maximum ten approved messages per run. Master delivery and automatic queueing switches remain off. | Disabled |
+| Existing customers | Review enrollment individually | Explicit email opt-in required. Operator explicitly enrolls in the existing-customer sequence. Automatic queueing remains off pending launch; manual message review is available. | No customers enrolled |
 | Eric's billing | No operation | No cancellation, refund, credit, subscription update, or customer merge. Existing duplicates return a support-review error. | Excluded |
 
 ## What changed
@@ -65,12 +65,34 @@ reminders even before visual confirmation. Open support, reauthorization,
 unsubscribe, suppression, lack of entitlement, and revoked lifetime codes pause
 or exclude delivery. No email is based solely on absence of dashboard logins.
 
-The admin UI at `/admin/activation` prepares each eligible email for review;
-it does not prepare/send the entire sequence automatically. Approved messages
-are rechecked at send time against fresh eligibility and exact recipient, copy,
-sender, reply-to, and address. Stale messages become `skipped` and require a fresh
-review. Delivery remains disabled until environment configuration and scheduling
-are explicitly approved. This is a deliberate review-first rollout.
+The daily lifecycle job runs at 14:00 UTC (8am Austin standard time / 9am daylight time).
+`LIFECYCLE_EMAIL_ENABLED` is the master switch: unless exactly `true`, the job returns
+before any database or provider access. `LIFECYCLE_AUTOMATION_ENABLED=true` additionally
+allows automatic queueing of the approved template version for eligible, explicitly
+opted-in and enrolled profiles. Both switches remain off by default; a configured
+postal address and the other provider secrets are required before either path runs.
+Existing customers still require explicit cohort enrollment; purchase is not consent.
+
+Each run scans profiles in stable pages of 100, five accounts at a time, with a
+20-second scan budget. It reports `scanComplete:false` if the budget is exhausted;
+check this field before scaling enrollment and increase scan capacity or add a durable
+cursor if it becomes false. It sends at most ten approved messages, stopping new sends
+after 40 seconds to leave room for provider timeouts. At launch, review run receipts,
+unknown/sending rows, and queue backlog daily. The daily schedule is suitable for the
+initial small cohort; it does not promise immediate welcome delivery.
+
+The worker holds a global run lock and per-user locks, never replaces sent or ambiguous
+receipts, and rechecks eligibility and exact payload before sending. Changed or no-longer
+eligible messages are skipped. The manual `/admin/activation` review flow remains
+available when automation is disabled. Customer sending remains disabled after this release.
+
+`scripts/test-lifecycle-owner.cjs` is an explicit operator-only E2E harness, never a web
+route or scheduled command. It only targets Nick's verified Gmail account, uses a
+synthetic welcome-stage scenario with real outbox records, provider transport, and the
+live signed unsubscribe endpoint, and restores the account's email preference fields.
+It never changes calendar connections or billing. Test receipts use `test:e2e-owner-v1:`
+step names and cannot be sent through the normal internal-account-excluding worker.
+The fixed marker prevents accidental repeat tests after provider acceptance or ambiguity.
 
 Unknown provider responses and interrupted `sending` rows block further sends
 for that user. Reconcile those rows with provider receipts manually; never reset
@@ -173,3 +195,12 @@ both unfinished setup and confirmed-active branches. No schema migration needed.
 42 tests pass, including engagement timing, missed windows, consent, current setup
 health, weekly spacing and CTA selection. No billing code or customer billing
 records changed.
+
+## Automatic queue and owner E2E validation
+
+47 Jest tests and the production build pass. The owner-only welcome fixture
+passed real queue deduplication, provider acceptance, replay protection, read-only
+unsubscribe GET, and one-click unsubscribe POST. Original email preference values
+were restored; no calendar or billing state changed. The scheduled worker remains
+disabled in production until the postal address and customer activation are ready.
+Earlier release-check sections above describe their historical release snapshots.

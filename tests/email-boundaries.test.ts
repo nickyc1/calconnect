@@ -19,3 +19,14 @@ test('unverified delivery webhooks cannot suppress users', async () => {
   const r = await POST(new NextRequest('https://example.com/api/lifecycle/webhook', { method: 'POST', body: JSON.stringify({ type: 'email.bounced', data: { to: ['customer@example.com'] } }) }));
   expect(r.status).toBe(400); expect(mockDb.from).not.toHaveBeenCalled();
 });
+
+test('automation cannot bypass disabled delivery or missing postal address', async () => {
+  process.env.LIFECYCLE_AUTOMATION_ENABLED = 'true';
+  const req = () => new NextRequest('https://example.com/api/cron/lifecycle', { headers: { authorization: 'Bearer test-cron-secret' } });
+  expect(await (await GET(req())).json()).toEqual({enabled:false,sent:0});
+  process.env.LIFECYCLE_EMAIL_ENABLED = 'true';
+  delete process.env.LIFECYCLE_POSTAL_ADDRESS;
+  expect((await GET(req())).status).toBe(503);
+  expect(mockDb.from).not.toHaveBeenCalled();
+  delete process.env.LIFECYCLE_AUTOMATION_ENABLED;
+});
