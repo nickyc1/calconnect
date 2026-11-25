@@ -44,7 +44,8 @@ const guidance: Record<string, string> = {
 export function renderEmail(step: Step, state: ActivationState, origin: string) {
   const tip = guidance[state.stage] || 'Open your dashboard to check your calendar connections.';
   const messages: Record<Step, { subject: string; text: string }> = {
-    welcome: { subject: "Hey, welcome to CalConnect 👋", text: `Hey! Nick here, I built CalConnect. Glad you're giving it a try.
+    welcome: { subject: "Hey, welcome to CalConnect 👋", text: `Hey! Nick here, I built CalConnect.
+I wanted a simple way to keep calendars in sync without getting double-booked. Glad you're giving it a try.
 
 Let's get your first busy block showing up on another calendar. That's when the setup starts to make sense.
 
