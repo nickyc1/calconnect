@@ -45,7 +45,7 @@ been changed. Eric's Basic and Pro subscriptions remain untouched.
 
 ## Email sequence and review operation
 
-Product voice: CalConnect Support. No claims written in Nick's personal voice.
+Product voice: Nick from CalConnect, signed Nick. All nine templates invite replies directly to Nick; the configured Reply-To remains his Gmail. Sender display name is applied in the review payload while preserving the configured sending address. Customer sending stays disabled. Copy updated to activation-v3 after reading both canonical Nick profiles.
 Unchecked email opt-in is on the dashboard. New signups opting in within 14 days
 can enter the new-user cohort. Older customers need operator enrollment after
 opt-in. Known internal accounts/plus aliases are excluded at candidate creation.

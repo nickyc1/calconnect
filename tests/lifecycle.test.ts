@@ -66,7 +66,7 @@ test('active guidance requires consent, healthy setup, existing enrollment and w
   expect(nextStep(activeState, { ...activeProfile, last_email_at:new Date(now + 14 * DAY).toISOString() }, ['success'], now + 21 * DAY)).toBe('active_2');
 });
 test('success and active tips use dashboard CTA; help uses supportive copy', () => {
-  expect(renderEmail('help', state, 'https://example.com').text).toContain('Need help getting your first busy block to appear?');
+  expect(renderEmail('help', state, 'https://example.com').text).toContain('Get setup help');
   for (const step of ['success','active_1','active_2','active_3'] as const) {
     const copy = renderEmail(step, activeState, 'https://example.com').text;
     expect(copy).toContain('Open your dashboard: https://example.com/dashboard');

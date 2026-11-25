@@ -16,5 +16,5 @@ export async function candidate(userId: string) {
   const latestSent = history.data.filter((r: any) => r.sent_at).map((r: any) => r.sent_at).sort().pop();
   const step = nextStep(state, { ...profile, last_email_at: [profile?.last_email_at, latestSent].filter(Boolean).sort().pop() }, sent);
   if (!step) return null;
-  return { step, payload: { to: email, ...renderEmail(step, state, process.env.NEXT_PUBLIC_APP_URL || 'https://www.calconnect.io'), version: SEQUENCE_VERSION, from: process.env.LIFECYCLE_EMAIL_FROM || '(sender not configured)', replyTo: process.env.LIFECYCLE_REPLY_TO || 'n.christensen4@gmail.com', address: process.env.LIFECYCLE_POSTAL_ADDRESS || '(business address not configured)' } };
+  return { step, payload: { to: email, ...renderEmail(step, state, process.env.NEXT_PUBLIC_APP_URL || 'https://www.calconnect.io'), version: SEQUENCE_VERSION, from: process.env.LIFECYCLE_EMAIL_FROM ? `Nick from CalConnect <${process.env.LIFECYCLE_EMAIL_FROM.match(/<([^>]+)>/)?.[1] || process.env.LIFECYCLE_EMAIL_FROM.trim()}>` : '(sender not configured)', replyTo: process.env.LIFECYCLE_REPLY_TO || 'n.christensen4@gmail.com', address: process.env.LIFECYCLE_POSTAL_ADDRESS || '(business address not configured)' } };
 }
